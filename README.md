@@ -22,11 +22,8 @@ by [Lokesh Dhakar](http://www.lokeshdhakar.com)
 
 ### Local development
 
-Some old tech, but it works, so no upgrading till something breaks.
-
-- Install [Bower](https://bower.io/) and [Grunt](https://gruntjs.com/): `npm install -g bower grunt`
-- Install jQuery dependency with Bower: `bower install`
-- Start local server: `grunt`
+- Install dependencies: `npm install`
+- Start local server: `npm start`
 - Navigate to `localhost:8000/examples`
 - Update `examples/index.html` to load jQuery and `src/js/lightbox.js`.
 
