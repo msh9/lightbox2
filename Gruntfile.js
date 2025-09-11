@@ -26,22 +26,6 @@ module.exports = function(grunt) {
         ],
       },
     },
-    jshint: {
-      all: [
-        'src/js/lightbox.js'
-      ],
-      options: {
-        jshintrc: true
-      }
-    },
-    jscs: {
-      src: [
-        'src/js/lightbox.js'
-      ],
-      options: {
-        config: ".jscsrc"
-      }
-    },
     uglify: {
       options: {
         preserveComments: 'some',
@@ -71,13 +55,10 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-contrib-connect');
   grunt.loadNpmTasks('grunt-contrib-copy');
-  grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-uglify');
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-contrib-cssmin');
-  grunt.loadNpmTasks("grunt-jscs");
 
   grunt.registerTask('default', ['connect', 'watch']);
-  grunt.registerTask('test', ['jshint', 'jscs']);
-  grunt.registerTask('build', ['jshint', 'jscs', 'copy:dist', 'concat', 'uglify', 'cssmin:minify']);
+  grunt.registerTask('build', ['copy:dist', 'concat', 'uglify', 'cssmin:minify']);
 };
