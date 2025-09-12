@@ -30,8 +30,9 @@
     "build": "npm run lint && grunt build",
     "postinstall": "bower install",
     "start": "grunt",
-    "lint": "eslint src/",
-    "lint:fix": "eslint --fix src/"
+    "lint": "npm run lint:js && npm run lint:css",
+    "lint:js": "eslint src/js/lightbox.js",
+    "lint:css": "stylelint \"src/css/**/*.css\""
   },
   "devDependencies": {
     "bower": "^1.8.14",
@@ -43,6 +44,11 @@
     "grunt-contrib-copy": "^1.0.0",
     "grunt-contrib-cssmin": "^5.0.0",
     "grunt-contrib-uglify": "^5.2.2",
-    "grunt-contrib-watch": "^1.1.0"
+    "grunt-contrib-watch": "^1.1.0",
+    "prettier": "^3.3.2",
+    "stylelint": "^16.6.1",
+    "stylelint-config-prettier": "^9.0.5",
+    "stylelint-config-standard": "^36.0.0",
+    "stylelint-prettier": "^5.0.0"
   }
 }
