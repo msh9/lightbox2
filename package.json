@@ -18,19 +18,19 @@
   "licenses": [
     {
       "type": "MIT",
-      "url": "https://raw.githubusercontent.com/lokesh/lightbox2/master/LICENSE"
+      "url": "https://github.com/msh9/lightbox2/blob/main/LICENSE"
     }
   ],
   "scripts": {
     "build": "npx concurrently \"npm:build:*\"",
-    "build:js": "npx rollup -c rollup.config.js",
+    "build:js": "npx rollup -c rollup.config.mjs",
     "build:css": "npx cssnano src/css/lightbox.css > dist/css/lightbox.min.css",
     "watch": "npx concurrently \"npm:watch:*\"",
-    "watch:js": "npx rollup -c rollup.config.js -w",
+    "watch:js": "npx rollup -c rollup.config.mjs -w",
     "watch:css": "npx chokidar 'src/css/**/*.css' -c 'npm run build:css'",
     "start": "http-server .",
     "lint": "npx concurrently \"npm:lint:*\"",
-    "lint:js": "eslint .",
+    "lint:js": "eslint",
     "lint:css": "stylelint \"src/css/**/*.css\""
   },
   "devDependencies": {

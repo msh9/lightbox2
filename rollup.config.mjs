@@ -1,8 +1,8 @@
-const resolve = require('@rollup/plugin-node-resolve');
-const terser = require('@rollup/plugin-terser');
-const commonjs = require('@rollup/plugin-commonjs');
+import resolve from '@rollup/plugin-node-resolve';
+import terser from '@rollup/plugin-terser';
+import commonjs from '@rollup/plugin-commonjs';
 
-module.exports = [
+export default [
   {
     input: 'src/js/lightbox.js',
     output: {
@@ -10,7 +10,7 @@ module.exports = [
       format: 'iife',
       name: 'lightbox'
     },
-    plugins: [resolve(), commonjs()],
+    plugins: [resolve(), commonjs()]
   },
   {
     input: 'src/js/lightbox.js',
@@ -29,7 +29,7 @@ module.exports = [
       format: 'es',
       name: 'lightbox'
     },
-    plugins: [resolve(), commonjs()],
+    plugins: [resolve(), commonjs()]
   },
   {
     input: 'src/js/lightbox.js',
@@ -38,7 +38,7 @@ module.exports = [
       format: 'es',
       name: 'lightbox'
     },
-    plugins: [resolve(), commonjs()],
+    plugins: [resolve(), commonjs()]
   },
   {
     input: 'src/js/lightbox.js',
@@ -48,5 +48,5 @@ module.exports = [
       name: 'lightbox'
     },
     plugins: [resolve(), commonjs(), terser()]
-  },
+  }
 ];
