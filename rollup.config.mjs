@@ -7,7 +7,7 @@ export default [
     input: 'src/js/lightbox.js',
     output: {
       file: 'dist/js/lightbox-jquery.js',
-      format: 'iife',
+      format: 'umd',
       name: 'lightbox'
     },
     plugins: [resolve(), commonjs()]
@@ -16,7 +16,7 @@ export default [
     input: 'src/js/lightbox.js',
     output: {
       file: 'dist/js/lightbox-jquery.min.js',
-      format: 'iife',
+      format: 'umd',
       name: 'lightbox'
     },
     plugins: [resolve(), commonjs(), terser()]

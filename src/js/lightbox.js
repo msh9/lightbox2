@@ -1,3 +1,4 @@
+'use strict'
 /* !
  * Lightbox v2.11.5
  * by Lokesh Dhakar
@@ -428,14 +429,7 @@ Lightbox.prototype.updateNav = function() {
   // Check to see if the browser supports touch events. If so, we take the conservative approach
   // and assume that mouse hover events are not supported and always show prev/next navigation
   // arrows in image sets.
-  var alwaysShowNav = false;
-  try {
-    document.createEvent('TouchEvent');
-    alwaysShowNav = (this.options.alwaysShowNavOnTouchDevices) ? true : false;
-  } finally {
-    alwaysShowNav = false;
-  }
-
+  const alwaysShowNav = this.options.alwaysShowNavOnTouchDevices;
   this.$lightbox.find('.lb-nav').show();
 
   if (this.album.length > 1) {
@@ -551,4 +545,4 @@ Lightbox.prototype.end = function() {
   }
 };
 
-export default Lightbox;
+export default new Lightbox();
