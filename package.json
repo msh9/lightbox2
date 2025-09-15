@@ -11,14 +11,9 @@
     "slideshow",
     "images"
   ],
-  "homepage": "http://lokeshdhakar.com/projects/lightbox2/",
-  "main": "./dist/js/lightbox.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lokesh/lightbox2.git"
-  },
-  "bugs": {
-    "url": "https://github.com/lokesh/lightbox2/issues"
+    "url": "https://github.com/msh9/lightbox2"
   },
   "licenses": [
     {
@@ -27,27 +22,31 @@
     }
   ],
   "scripts": {
-    "build": "npm run lint && grunt build",
-    "postinstall": "bower install",
-    "start": "grunt",
-    "lint": "npm run lint:js && npm run lint:css",
-    "lint:js": "eslint src/js/lightbox.js",
+    "build": "npx concurrently \"npm:build:*\"",
+    "build:js": "npx rollup -c rollup.config.js",
+    "build:css": "npx cssnano src/css/lightbox.css > dist/css/lightbox.min.css",
+    "watch": "npx concurrently \"npm:watch:*\"",
+    "watch:js": "npx rollup -c rollup.config.js -w",
+    "watch:css": "npx chokidar 'src/css/**/*.css' -c 'npm run build:css'",
+    "start": "http-server .",
+    "lint": "npx concurrently \"npm:lint:*\"",
+    "lint:js": "eslint .",
     "lint:css": "stylelint \"src/css/**/*.css\""
   },
   "devDependencies": {
-    "bower": "^1.8.14",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^8.2.2",
+    "cssnano-cli": "^1.0.5",
     "eslint": "^9.5.0",
     "globals": "^16.4.0",
-    "grunt": "^1.6.1",
-    "grunt-contrib-concat": "^2.1.0",
-    "grunt-contrib-connect": "^3.0.0",
-    "grunt-contrib-copy": "^1.0.0",
-    "grunt-contrib-cssmin": "^5.0.0",
-    "grunt-contrib-uglify": "^5.2.2",
-    "grunt-contrib-watch": "^1.1.0",
+    "http-server": "^14.1.1",
+    "jquery": "^3.7.1",
     "prettier": "^3.3.2",
+    "rollup": "^4.18.0",
     "stylelint": "^16.6.1",
-    "stylelint-config-prettier": "^9.0.5",
     "stylelint-config-standard": "^36.0.0",
     "stylelint-prettier": "^5.0.0"
   }

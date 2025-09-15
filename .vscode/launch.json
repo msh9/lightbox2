@@ -4,10 +4,22 @@
     {
         "type": "node",
         "request": "launch",
-        "name": "Run Grunt Server",
+        "name": "Run File Watch",
         "runtimeExecutable": "npm",
         "runtimeArgs": [
-            "run-script",
+            "run",
+            "watch"
+        ],
+        "console": "integratedTerminal",
+        "internalConsoleOptions": "neverOpen"
+    },
+    {
+        "type": "node",
+        "request": "launch",
+        "name": "Run HTTP Server",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": [
+            "run",
             "start"
         ],
         "console": "integratedTerminal",
@@ -17,7 +29,7 @@
       "type": "msedge",
       "request": "launch",
       "name": "Launch Edge",
-      "url": "http://localhost:8000",
+      "url": "http://localhost:8080",
       "webRoot": "${workspaceFolder}"
     }
   ],
@@ -25,7 +37,8 @@
     {
       "name": "Node & Edge Debug",
       "configurations": [
-        "Run Grunt Server",
+        "Run File Watch",
+        "Run HTTP Server",
         "Launch Edge"
       ]
     }
