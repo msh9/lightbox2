@@ -71,7 +71,7 @@ Lightbox.prototype.init = function() {
 // that contain 'lightbox'. When these are clicked, start lightbox.
 Lightbox.prototype.enable = function() {
   var self = this;
-  $('body').on('click', 'a[rel^=lightbox], area[rel^=lightbox], a[data-lightbox], area[data-lightbox]', function(event) {
+  $('body').on('click', 'a[data-lightbox], area[data-lightbox]', function(event) {
     self.start($(event.currentTarget));
     return false;
   });
@@ -220,8 +220,7 @@ Lightbox.prototype.start = function($link) {
   let $links;
 
   if (dataLightboxValue) {
-    //$links = $($link.prop('tagName')).find('[data-lightbox="' + dataLightboxValue + '"]');
-    $links = $($link.prop('tagName')).find('[data-lightbox="' + dataLightboxValue + '"]');
+    $links = $.find('[data-lightbox="' + dataLightboxValue + '"]');
     for (var i = 0; i < $links.length; i = ++i) {
       addToAlbum($($links[i]));
       if ($links[i] === $link[0]) {
