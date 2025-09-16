@@ -41,6 +41,7 @@
     "concurrently": "^8.2.2",
     "cssnano-cli": "^1.0.5",
     "eslint": "^9.5.0",
+    "exifreader": "^4.31.2",
     "globals": "^16.4.0",
     "http-server": "^14.1.1",
     "jquery": "^3.7.1",
