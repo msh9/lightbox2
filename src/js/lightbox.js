@@ -1,11 +1,9 @@
 'use strict'
-/* !
- * Copyright Lokesh Dhakar 2015-2025
- * Copyright Michael Hughes 2025
- * Released under the MIT license
- * https://github.com/msh9/lightbox2/blob/main/LICENSE
+/*
+ * SPDX-License-Identifier: MIT
+ * Original work: © 2015-2025 Lokesh Dhakar
+ * Modifications: © 2025 Michael Hughes
  *
- * @preserve
  */
 import $ from 'jquery';
 
