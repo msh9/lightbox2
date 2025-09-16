@@ -1,8 +1,23 @@
 import { defineConfig, globalIgnores } from 'eslint/config';
+import pluginJest from 'eslint-plugin-jest';
 import globals from 'globals';
 
 export default defineConfig([
   globalIgnores(['dist/']),
+  {
+    files: ['**/*.test.mjs'],
+    plugins: { jest: pluginJest },
+    languageOptions: {
+      globals: pluginJest.environments.globals.globals
+    },
+    rules: {
+      'jest/no-disabled-tests': 'warn',
+      'jest/no-focused-tests': 'error',
+      'jest/no-identical-title': 'error',
+      'jest/prefer-to-have-length': 'warn',
+      'jest/valid-expect': 'error'
+    }
+  },
   {
     languageOptions: {
       globals: {

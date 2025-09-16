@@ -1,4 +1,3 @@
-'use strict'
 /*
  * SPDX-License-Identifier: MIT
  * Original work: © 2015-2025 Lokesh Dhakar

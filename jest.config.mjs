@@ -1,7 +1,7 @@
 /** @type {import('jest').Config} */
 const config = {
   transform: {},
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jsdom'
 };
 
 export default config;
