@@ -1,14 +1,9 @@
 'use strict'
 /* !
- * Lightbox v2.11.5
- * by Lokesh Dhakar
- *
- * More info:
- * http://lokeshdhakar.com/projects/lightbox2/
- *
- * Copyright Lokesh Dhakar
+ * Copyright Lokesh Dhakar 2015-2025
+ * Copyright Michael Hughes 2025
  * Released under the MIT license
- * https://github.com/lokesh/lightbox2/blob/master/LICENSE
+ * https://github.com/msh9/lightbox2/blob/main/LICENSE
  *
  * @preserve
  */
