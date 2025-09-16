@@ -23,6 +23,7 @@ The project uses npm scripts for linting, testing, and distribution builds. Depe
 ### Key Commands
 
 -   **`npm start`**: Starts a local development server at `http://localhost:8080`. The main example page is at `http://localhost:8000/examples/index.html`.
+-   **`npm run test`**: Tests the lightbox
 -   **`npm run lint`**: Lints the JavaScript and CSS files
 -   **`npm run build`**: Creates a production-ready `dist` directory. Uses cssnano and rollup, see rollup's config in `rollup.config.js`
 
