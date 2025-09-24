@@ -130,4 +130,7 @@ describe('Lightbox', () => {
       }
     });
   });
+
+  describe.skip('exif data present', () => {
+  });
 });
