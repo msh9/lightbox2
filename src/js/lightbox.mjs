@@ -5,6 +5,7 @@
  *
  */
 import $ from 'jquery';
+import ExifReader from 'exifreader';
 
 function Lightbox(options) {
   this.album = [];
@@ -89,7 +90,7 @@ Lightbox.prototype.build = function() {
   // on the page below.
   //
   // Github issue: https://github.com/lokesh/lightbox2/issues/663
-  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-caption"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
+  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-title"></span><span class="lb-caption"></span><span class="lb-copyright"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
 
   // Cache jQuery objects
   this.$lightbox       = $('#lightbox');
@@ -435,7 +436,16 @@ Lightbox.prototype.updateNav = function() {
 
 // Display caption, image number, and closing button.
 Lightbox.prototype.updateDetails = function() {
-  var self = this;
+  let self = this;
+
+  const currentImage = self.album[self.currentImageIndex];
+  const tags = ExifReader.loan(currentImage.src);
+  if (tags.title) {
+    currentImage.title = tags.title;
+  }
+  if (tags.copyright) {
+    currentImage.copyright = tags.copyright;
+  }
 
   // Enable anchor clicks in the injected caption html.
   // Thanks Nate Wright for the fix. @https://github.com/NateWr
