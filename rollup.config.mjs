@@ -4,7 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 
 export default [
   {
-    input: 'src/js/lightbox.js',
+    input: 'src/js/lightbox.mjs',
     output: {
       file: 'dist/js/lightbox-jquery.js',
       format: 'umd',
@@ -13,7 +13,7 @@ export default [
     plugins: [resolve(), commonjs()]
   },
   {
-    input: 'src/js/lightbox.js',
+    input: 'src/js/lightbox.mjs',
     output: {
       file: 'dist/js/lightbox-jquery.min.js',
       format: 'umd',
@@ -22,7 +22,7 @@ export default [
     plugins: [resolve(), commonjs(), terser()]
   },
   {
-    input: 'src/js/lightbox.js',
+    input: 'src/js/lightbox.mjs',
     external: ['jquery'],
     output: {
       file: 'dist/js/lightbox.module.js',
@@ -32,7 +32,7 @@ export default [
     plugins: [resolve(), commonjs()]
   },
   {
-    input: 'src/js/lightbox.js',
+    input: 'src/js/lightbox.mjs',
     output: {
       file: 'dist/js/lightbox-jquery.module.js',
       format: 'es',
@@ -41,7 +41,7 @@ export default [
     plugins: [resolve(), commonjs()]
   },
   {
-    input: 'src/js/lightbox.js',
+    input: 'src/js/lightbox.mjs',
     output: {
       file: 'dist/js/lightbox-jquery.module.min.js',
       format: 'es',

@@ -1,16 +1,8 @@
-'use strict'
-/* !
- * Lightbox v2.11.5
- * by Lokesh Dhakar
+/*
+ * SPDX-License-Identifier: MIT
+ * Original work: © 2015-2025 Lokesh Dhakar
+ * Modifications: © 2025 Michael Hughes
  *
- * More info:
- * http://lokeshdhakar.com/projects/lightbox2/
- *
- * Copyright Lokesh Dhakar
- * Released under the MIT license
- * https://github.com/lokesh/lightbox2/blob/master/LICENSE
- *
- * @preserve
  */
 import $ from 'jquery';
 
@@ -61,7 +53,7 @@ Lightbox.prototype.imageCountLabel = function(currentImageNum, totalImages) {
 Lightbox.prototype.init = function() {
   var self = this;
   // Both enable and build methods require the body tag to be in the DOM.
-  $(document).ready(function() {
+  $(function() {
     self.enable();
     self.build();
   });

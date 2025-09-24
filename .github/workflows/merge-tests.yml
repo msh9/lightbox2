@@ -1,4 +1,4 @@
-name: Lint Code
+name: Merge Checks
 permissions:
   contents: read
 
@@ -26,3 +26,6 @@ jobs:
 
       - name: Run linter
         run: npm run lint
+
+      - name: Run tests
+        run: npm run test
