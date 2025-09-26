@@ -5,6 +5,7 @@
  *
  */
 import $ from 'jquery';
+import ExifReader from 'exifreader';
 
 function Lightbox(options) {
   this.album = [];
@@ -89,7 +90,7 @@ Lightbox.prototype.build = function() {
   // on the page below.
   //
   // Github issue: https://github.com/lokesh/lightbox2/issues/663
-  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-caption"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
+  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-title"></span><span class="lb-caption"></span><span class="lb-copyright"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
 
   // Cache jQuery objects
   this.$lightbox       = $('#lightbox');
@@ -133,7 +134,7 @@ Lightbox.prototype.build = function() {
     return false;
   });
 
-  this.$lightbox.find('.lb-prev').on('click', function() {
+  this.$lightbox.find('.lb-prev').on('click', function handleClickPrevious() {
     if (self.currentImageIndex === 0) {
       self.changeImage(self.album.length - 1);
     } else {
@@ -142,7 +143,7 @@ Lightbox.prototype.build = function() {
     return false;
   });
 
-  this.$lightbox.find('.lb-next').on('click', function() {
+  this.$lightbox.find('.lb-next').on('click', function handleClickNext() {
     if (self.currentImageIndex === self.album.length - 1) {
       self.changeImage(0);
     } else {
@@ -207,7 +208,6 @@ Lightbox.prototype.start = function($link) {
     });
   }
 
-  // Support both data-lightbox attribute and rel attribute implementations
   const dataLightboxValue = $link.attr('data-lightbox');
   let $links;
 
@@ -254,8 +254,8 @@ Lightbox.prototype.changeImage = function(imageNumber) {
   this.$outerContainer.addClass('animating');
 
   // When image to show is preloaded, we send the width and height to sizeContainer()
-  var preloader = new Image();
-  preloader.onload = function() {
+  const preloader = new Image();
+  preloader.addEventListener('load', async function imageSourceLoaded() {
     var imageHeight;
     var imageWidth;
     var maxImageHeight;
@@ -332,8 +332,8 @@ Lightbox.prototype.changeImage = function(imageNumber) {
       }
     }
 
-    self.sizeContainer($image.width(), $image.height());
-  };
+    await self.sizeContainer($image.width(), $image.height());
+  });
 
   // Preload image before showing
   preloader.src = this.album[imageNumber].link;
@@ -360,7 +360,7 @@ Lightbox.prototype.sizeOverlay = function() {
 
 // Animate the size of the lightbox to fit the image we are showing
 // This method also shows the the image.
-Lightbox.prototype.sizeContainer = function(imageWidth, imageHeight) {
+Lightbox.prototype.sizeContainer = async function(imageWidth, imageHeight) {
   var self = this;
 
   var oldWidth  = this.$outerContainer.outerWidth();
@@ -368,7 +368,7 @@ Lightbox.prototype.sizeContainer = function(imageWidth, imageHeight) {
   var newWidth  = imageWidth + this.containerPadding.left + this.containerPadding.right + this.imageBorderWidth.left + this.imageBorderWidth.right;
   var newHeight = imageHeight + this.containerPadding.top + this.containerPadding.bottom + this.imageBorderWidth.top + this.imageBorderWidth.bottom;
 
-  function postResize() {
+  async function postResize() {
     self.$lightbox.find('.lb-data-container').width(newWidth);
     self.$lightbox.find('.lb-prevLink').height(newHeight);
     self.$lightbox.find('.lb-nextLink').height(newHeight);
@@ -376,28 +376,28 @@ Lightbox.prototype.sizeContainer = function(imageWidth, imageHeight) {
     // Set focus on one of the two root nodes so keyboard events are captured.
     self.$overlay.trigger('focus');
 
-    self.showImage();
+    await self.showImage();
   }
 
   if (oldWidth !== newWidth || oldHeight !== newHeight) {
     this.$outerContainer.animate({
       width: newWidth,
       height: newHeight
-    }, this.options.resizeDuration, 'swing', function() {
-      postResize();
+    }, this.options.resizeDuration, 'swing', async function() {
+      await postResize();
     });
   } else {
-    postResize();
+    await postResize();
   }
 };
 
 // Display the image and its details and begin preload neighboring images.
-Lightbox.prototype.showImage = function() {
+Lightbox.prototype.showImage = async function() {
   this.$lightbox.find('.lb-loader').stop(true).hide();
   this.$lightbox.find('.lb-image').fadeIn(this.options.imageFadeDuration);
 
   this.updateNav();
-  this.updateDetails();
+  await this.updateDetails();
   this.preloadNeighboringImages();
   this.enableKeyboardNav();
 };
@@ -434,8 +434,18 @@ Lightbox.prototype.updateNav = function() {
 };
 
 // Display caption, image number, and closing button.
-Lightbox.prototype.updateDetails = function() {
-  var self = this;
+Lightbox.prototype.updateDetails = async function() {
+  let self = this;
+
+  const currentImage = self.album[self.currentImageIndex];
+  const tags = await ExifReader.load(currentImage.link)
+  if (tags.title) {
+    currentImage.title = tags.title.description;
+  }
+  if (tags.copyright) {
+    currentImage.copyright = tags.copyright.description;
+  }
+
 
   // Enable anchor clicks in the injected caption html.
   // Thanks Nate Wright for the fix. @https://github.com/NateWr

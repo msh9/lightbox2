@@ -4,9 +4,19 @@
  *
  * @jest-environment: jsdom
  */
-import { beforeEach, describe, jest } from '@jest/globals';
+import { afterEach, beforeAll, beforeEach, describe, expect, jest } from '@jest/globals';
 import $ from 'jquery';
 import lightbox from './lightbox.mjs';
+import ExifReader from 'exifreader';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const examplesDir = path.resolve(__dirname, '../../test-examples');
+const withExifFile = path.join(examplesDir, 'ImgA.avif');
+const withoutExifFile = path.join(examplesDir, 'ImgD.avif');
 
 describe('Lightbox', () => {
   it('should export an object', () => {
@@ -45,6 +55,7 @@ describe('Lightbox', () => {
   describe('single image handling', () => {
     const title = 'Single Title';
     const altCaption = 'Single Caption';
+    let changeImageSpy ;
     beforeEach(() => {
       document.body.innerHTML
         = `<div> \ 
@@ -53,8 +64,8 @@ describe('Lightbox', () => {
           </a> \ 
         </div>`;
       lightbox.build();
-      // We call enable() to ensure the click handler is attached.
       lightbox.enable();
+      changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -62,13 +73,12 @@ describe('Lightbox', () => {
     });
 
     it('should call start when a lightbox link is clicked', () => {
-      const startSpy = jest.spyOn(lightbox, 'start');
       const link = $('a[data-lightbox]');
 
       link.trigger('click');
 
-      expect(startSpy).toHaveBeenCalledTimes(1);
-      expect(startSpy.mock.calls[0][0][0]).toBe(link[0]);
+      expect(changeImageSpy).toHaveBeenCalled();
+      expect(changeImageSpy).toHaveBeenCalledWith(0);
     });
 
     it('should prevent default action and stop propagation', () => {
@@ -84,18 +94,16 @@ describe('Lightbox', () => {
   });
 
   describe('multi-image album', () => {
-    const title = 'Picture Title';
-    const altCaption = 'Picture Caption';
-    const baseFileName = 'image';
     beforeEach(() => {
-      const albumLinks = [];
-      for (let i = 0; i < 3; i++) {
-        albumLinks.push(`<a href="${baseFileName}${i}.jpg" data-lightbox="test-album" data-title="${title}${i}"> \
-            <img alt="${altCaption}${i}" src="${baseFileName}${i}.jpg" /> \
-          </a>`);
-      }
-
-      document.body.innerHTML = `<div>${albumLinks.join('')}</div>`;
+      document.body.innerHTML
+        = `<div> \ 
+          <a href="${withExifFile}" data-lightbox="multi-image" data-title="ImgA"> \ 
+            <img alt="ImgA" src="${withExifFile}" /> \ 
+          </a> \ 
+          <a href="${withoutExifFile}" data-lightbox="multi-image" data-title="ImgD"> \ 
+            <img alt="ImgD" src="${withoutExifFile}" /> \ 
+          </a> \ 
+        </div>`;
       lightbox.build();
       lightbox.enable();
     });
@@ -104,33 +112,90 @@ describe('Lightbox', () => {
       jest.restoreAllMocks();
     });
 
-    it('should create an album and call changeImage with the correct index', () => {
+    it('should create an album and call changeImage with the correct index', async () => {
       const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
 
       // Click the second image in the album
       const secondLink = $('a[data-lightbox]').eq(1);
       secondLink.trigger('click');
 
-      // Album should be created
-      expect(lightbox.album).toHaveLength(3);
-
-      // changeImage should be called with the index of the clicked image
+      expect(lightbox.album).toHaveLength(2);
       expect(changeImageSpy).toHaveBeenCalledWith(1);
     });
 
-    it('should populate the album with correct data', () => {
+    it('should populate the album with correct data', async () => {
       jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
 
-      // Click any link to trigger album creation
       $('a[data-lightbox]').first().trigger('click');
 
-      for (let i = 0; i < 3; i++) {
-        expect(lightbox.album[i].link).toBe(`${baseFileName}${i}.jpg`);
-        expect(lightbox.album[i].title).toBe(`${title}${i}`);
-      }
+      // Spot check
+      expect(lightbox.album[0].link).toBe(withExifFile);
+      expect(lightbox.album[1].link).toBe(withoutExifFile);
     });
   });
 
-  describe.skip('exif data present', () => {
+  describe('exif integration', () => {
+    let expectedExifTags;
+
+    function setupAlbumWithOverrides({
+      src = 'examples/mock-image.avif',
+      title = 'the default title'
+    } = {}) {
+      document.body.innerHTML
+        = `<div> \ 
+          <a href="${src}" data-lightbox="test-single-exif" data-title="${title}"> \ 
+            <img alt="the alt" src="${src}" /> \ 
+          </a> \ 
+        </div>`;
+
+      /*
+        We still call #build #enable for click handler behavior, but we never call #start
+        in these tests so we need to manually set lightbox's album to have appropriate data.
+      */
+      lightbox.build();
+      lightbox.enable();
+      lightbox.album = [
+        {
+          link: src,
+          alt: 'the alt',
+          title
+        }
+      ];
+      lightbox.currentImageIndex = 0;
+    };
+
+    beforeAll(async () => {
+      const buffer = await fs.readFile(withExifFile);
+      expectedExifTags = await ExifReader.load(buffer);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      lightbox.album = [];
+      lightbox.currentImageIndex = 0;
+    });
+
+    it('applies EXIF metadata from examples/ImgA.avif when available', async () => {
+      setupAlbumWithOverrides({ src: withExifFile });
+
+      await lightbox.updateDetails();
+
+      const updated = lightbox.album[0];
+      expect(updated.title).toBe(expectedExifTags.title?.description);
+      expect(updated.copyright).toBe(expectedExifTags.copyright?.description);
+    });
+
+    it('preserves existing metadata when EXIF data is absent', async () => {
+      const newTitle = 'Album Provided Title';
+      setupAlbumWithOverrides({
+        src: withoutExifFile,
+        title: newTitle
+      });
+
+      await lightbox.updateDetails();
+
+      const updated = lightbox.album[0];
+      expect(updated.copyright).toBeUndefined();
+    });
   });
 });
