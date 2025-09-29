@@ -31,7 +31,7 @@
       "request": "launch",
       "name": "Launch Edge",
       "url": "http://localhost:8080",
-      "webRoot": "${workspaceFolder}/test-examples"
+      "webRoot": "${workspaceFolder}"
     },
     {
       "type": "node",
