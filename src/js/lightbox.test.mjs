@@ -93,10 +93,59 @@ describe('Lightbox', () => {
     });
   });
 
+  describe('start', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+      lightbox.album = [];
+      lightbox.currentImageIndex = 0;
+      document.body.innerHTML = '';
+    });
+
+    it('uses the anchor href target when building the album', () => {
+      document.body.innerHTML
+        = `<div> \
+          <a href="full/image-a.jpg" data-lightbox="album"> \
+            <img alt="Thumb A" src="thumb/thumb-a.jpg" /> \
+          </a> \
+          <a href="full/image-b.jpg" data-lightbox="album"> \
+            <img alt="Thumb B" src="thumb/thumb-b.jpg" /> \
+          </a> \
+        </div>`;
+
+      lightbox.build();
+
+      const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
+      const firstLink = $('a[data-lightbox]').first();
+
+      lightbox.start(firstLink);
+
+      expect(lightbox.album[0].link).toBe(firstLink[0].href);
+      expect(lightbox.album[0].link).not.toBe(firstLink.find('img')[0].src);
+      expect(lightbox.album).toHaveLength(2);
+      expect(changeImageSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('does not throw when the anchor lacks an image child', () => {
+      document.body.innerHTML
+        = `<div> \
+          <a href="full/image-only.jpg" data-lightbox="solo">Open</a> \
+        </div>`;
+
+      lightbox.build();
+
+      const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
+      const link = $('a[data-lightbox]').first();
+
+      expect(() => lightbox.start(link)).not.toThrow();
+      expect(lightbox.album[0].link).toBe(link[0].href);
+      expect(changeImageSpy).toHaveBeenCalledWith(0);
+    });
+  });
+
   describe('multi-image album', () => {
     beforeEach(() => {
       document.body.innerHTML
-        = `<div> \ 
+        = `<div> \
           <a href="${withExifFile}" data-lightbox="multi-image" data-title="ImgA"> \ 
             <img alt="ImgA" src="${withExifFile}" /> \ 
           </a> \ 
