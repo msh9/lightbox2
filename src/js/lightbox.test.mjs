@@ -178,8 +178,11 @@ describe('Lightbox', () => {
       $('a[data-lightbox]').first().trigger('click');
 
       // Spot check
-      expect(lightbox.album[0].link).toBe(withExifFile);
-      expect(lightbox.album[1].link).toBe(withoutExifFile);
+      const expectedFirstLink = new URL(withExifFile, window.location.href).href;
+      const expectedSecondLink = new URL(withoutExifFile, window.location.href).href;
+
+      expect(lightbox.album[0].link).toBe(expectedFirstLink);
+      expect(lightbox.album[1].link).toBe(expectedSecondLink);
     });
   });
 
