@@ -103,14 +103,14 @@ describe('Lightbox', () => {
 
     it('uses the anchor href target when building the album', () => {
       document.body.innerHTML
-        = `<div> \
+        = '<div> \
           <a href="full/image-a.jpg" data-lightbox="album"> \
             <img alt="Thumb A" src="thumb/thumb-a.jpg" /> \
           </a> \
           <a href="full/image-b.jpg" data-lightbox="album"> \
             <img alt="Thumb B" src="thumb/thumb-b.jpg" /> \
           </a> \
-        </div>`;
+        </div>';
 
       lightbox.build();
 
@@ -127,9 +127,9 @@ describe('Lightbox', () => {
 
     it('does not throw when the anchor lacks an image child', () => {
       document.body.innerHTML
-        = `<div> \
+        = '<div> \
           <a href="full/image-only.jpg" data-lightbox="solo">Open</a> \
-        </div>`;
+        </div>';
 
       lightbox.build();
 
