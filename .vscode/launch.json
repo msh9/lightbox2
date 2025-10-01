@@ -32,6 +32,17 @@
       "name": "Launch Edge",
       "url": "http://localhost:8080",
       "webRoot": "${workspaceFolder}"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Tests",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--experimental-vm-modules",
+        "node_modules/jest/bin/jest.js"
+      ],
+      "console": "internalConsole"
     }
   ],
   "compounds": [
