@@ -34,13 +34,13 @@ Lightbox.defaults = {
   disableScrolling: false,
   /*
     Sanitize Title
-    If the caption data is trusted, for example you are hardcoding it in, then leave this to false.
-    This will free you to add html tags, such as links, in the caption.
+    If the title data is trusted, for example you are hardcoding it in, then leave this to false.
+    This will free you to add html tags, such as links, in the title.
 
-    If the caption data is user submitted or from some other untrusted source, then set this to true
+    If the title data is user submitted or from some other untrusted source, then set this to true
     to prevent xss and other injection attacks.
      */
-  sanitizeTitle: false
+  sanitizeTitle: true
 };
 
 Lightbox.prototype.option = function(options) {
@@ -90,7 +90,7 @@ Lightbox.prototype.build = function() {
   // on the page below.
   //
   // Github issue: https://github.com/lokesh/lightbox2/issues/663
-  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-title"></span><span class="lb-caption"></span><span class="lb-copyright"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
+  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox"><div class="lb-outer-container"><div class="lb-container"><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-title"></span><span id="copyright-title-spacer">—</span><span class="lb-copyright"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
 
   // Cache jQuery objects
   this.$lightbox       = $('#lightbox');
@@ -252,7 +252,7 @@ Lightbox.prototype.changeImage = function(imageNumber) {
   // Show loading state
   this.$overlay.fadeIn(this.options.fadeDuration);
   $('.lb-loader').fadeIn('slow');
-  this.$lightbox.find('.lb-image, .lb-nav, .lb-prev, .lb-next, .lb-data-container, .lb-numbers, .lb-caption').hide();
+  this.$lightbox.find('.lb-image, .lb-nav, .lb-prev, .lb-next, .lb-data-container, .lb-numbers').hide();
   this.$outerContainer.addClass('animating');
 
   // When image to show is preloaded, we send the width and height to sizeContainer()
@@ -435,32 +435,50 @@ Lightbox.prototype.updateNav = function() {
   }
 };
 
-// Display caption, image number, and closing button.
+// Display title, copyright, image number, and closing button.
 Lightbox.prototype.updateDetails = async function() {
   let self = this;
 
   const currentImage = self.album[self.currentImageIndex];
-  const tags = await ExifReader.load(currentImage.link)
-  if (tags.title) {
-    currentImage.title = tags.title.description;
+  const tags = await ExifReader.load(currentImage.link);
+  const titleFromTag = tags.title?.description;
+  if (titleFromTag) {
+    currentImage.title = titleFromTag;
   }
-  if (tags.copyright) {
-    currentImage.copyright = tags.copyright.description;
+  const copyrightFromTag = tags['Copyright']?.description;
+  if (copyrightFromTag) {
+    currentImage.copyright = copyrightFromTag;
   }
 
+  const $title = this.$lightbox.find('.lb-title');
+  const $copyright = this.$lightbox.find('.lb-copyright');
+  const $spacer = this.$lightbox.find('#copyright-title-spacer');
 
-  // Enable anchor clicks in the injected caption html.
-  // Thanks Nate Wright for the fix. @https://github.com/NateWr
-  if (typeof this.album[this.currentImageIndex].title !== 'undefined'
-      && this.album[this.currentImageIndex].title !== '') {
-    var $caption = this.$lightbox.find('.lb-caption');
-    if (this.options.sanitizeTitle) {
-      $caption.text(this.album[this.currentImageIndex].title);
-    } else {
-      $caption.html(this.album[this.currentImageIndex].title);
+  function renderText($node, value, sanitize) {
+    if (!value) {
+      $node.text('');
+      $node.hide();
+      return;
     }
-    $caption.fadeIn('fast');
+
+    if (sanitize) {
+      $node.text(value);
+    } else {
+      $node.html(value);
+    }
+
+    $node.fadeIn('fast');
   }
+
+  // Enable anchor clicks in the injected title html.
+  // Thanks Nate Wright for the fix. @https://github.com/NateWr
+  renderText($title, currentImage.title, this.options.sanitizeTitle);
+  if (currentImage.title && currentImage.copyright) {
+    $spacer.fadeIn('fast');
+  } else {
+    $spacer.hide();
+  }
+  renderText($copyright, currentImage.copyright, true);
 
   if (this.album.length > 1 && this.options.showImageNumberLabel) {
     var labelText = this.imageCountLabel(this.currentImageIndex + 1, this.album.length);

@@ -234,7 +234,10 @@ describe('Lightbox', () => {
 
       const updated = lightbox.album[0];
       expect(updated.title).toBe(expectedExifTags.title?.description);
-      expect(updated.copyright).toBe(expectedExifTags.copyright?.description);
+      expect(updated.copyright).toBe(expectedExifTags['Copyright']?.description);
+      expect($('.lb-title').text()).toBe(expectedExifTags.title?.description ?? '');
+      expect($('.lb-caption').text()).toBe(expectedExifTags.title?.description ?? '');
+      expect($('.lb-copyright').text()).toBe(expectedExifTags['Copyright']?.description ?? '');
     });
 
     it('preserves existing metadata when EXIF data is absent', async () => {
@@ -248,6 +251,10 @@ describe('Lightbox', () => {
 
       const updated = lightbox.album[0];
       expect(updated.copyright).toBeUndefined();
+      expect($('.lb-title').text()).toBe(newTitle);
+      expect($('.lb-caption').text()).toBe(newTitle);
+      expect($('.lb-copyright').text()).toBe('');
+      expect($('.lb-copyright').css('display')).toBe('none');
     });
   });
 });
