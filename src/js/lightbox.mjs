@@ -440,14 +440,18 @@ Lightbox.prototype.updateDetails = async function() {
   let self = this;
 
   const currentImage = self.album[self.currentImageIndex];
-  const tags = await ExifReader.load(currentImage.link);
-  const titleFromTag = tags.title?.description;
-  if (titleFromTag) {
-    currentImage.title = titleFromTag;
-  }
-  const copyrightFromTag = tags['Copyright']?.description;
-  if (copyrightFromTag) {
-    currentImage.copyright = copyrightFromTag;
+  try {
+    const tags = await ExifReader.load(currentImage.link);
+    const titleFromTag = tags.title?.description;
+    if (titleFromTag) {
+      currentImage.title = titleFromTag;
+    }
+    const copyrightFromTag = tags['Copyright']?.description;
+    if (copyrightFromTag) {
+      currentImage.copyright = copyrightFromTag;
+    }
+  } catch (e) {
+    console.warn(e, 'Failed to load image tags, copyright and title display will not be updated');
   }
 
   const $title = this.$lightbox.find('.lb-title');

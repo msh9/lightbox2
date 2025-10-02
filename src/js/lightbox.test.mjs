@@ -254,5 +254,17 @@ describe('Lightbox', () => {
       expect($('.lb-copyright').text()).toBe('');
       expect($('.lb-copyright').css('display')).toBe('none');
     });
+
+    it('safely continues when the exifreader throws an exception', async () => {
+      const title = 'Provided Title';
+      setupAlbumWithOverrides({
+        src: 'foo!!!',
+        title
+      });
+
+      await lightbox.updateDetails();
+
+      expect($('.lb-title').text()).toBe(title);
+    });
   });
 });
