@@ -1,7 +1,16 @@
 {
   "name": "lightbox2",
-  "version": "2.11.5",
-  "author": "Lokesh Dhakar <lokesh.dhakar@gmail.com>",
+  "version": "3.0.5",
+  "contributors": [
+    {
+      "name": "Lokesh Dhakar",
+      "email": "lokesh.dhakar@gmail.com"
+    },
+    {
+      "name": "Michael Hughes",
+      "email": "work@mihughes.com"
+    }
+  ],
   "description": "The original Lightbox script. Uses jQuery.",
   "keywords": [
     "lightbox",
