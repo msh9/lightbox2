@@ -4,7 +4,7 @@
 
 This project is a fork of Lightbox2, a popular and original JavaScript library for creating image overlays. It is a small, dependency-free (besides jQuery) library that works on all modern browsers. The library is written in vanilla JavaScript for browsers. This project aims to improve upon the original Lightbox2 by updating build toolchain (already done), adding tests, refactoring, and finally adding new functionality.
 
-Currently, main functionality is contained in `src/js/lightbox.js`. The styling is in `src/css/lightbox.css`. The library is initialized by adding the `data-lightbox` attribute to an anchor tag wrapping an image.
+Currently, main functionality is contained in `src/js/lightbox.mjs`. The styling is in `src/css/lightbox.css`. The library is initialized by adding the `data-lightbox` attribute to an anchor tag wrapping an image.
 
 ## Building and Running
 
@@ -22,11 +22,11 @@ The project uses npm scripts for linting, testing, and distribution builds. Depe
 
 ### Key Commands
 
--   **`npm start`**: Starts a local development server at `http://localhost:8080`. The main example page is at `http://localhost:8000/examples/index.html`.
+-   **`npm start`**: Starts a local development server at `http://localhost:8080`. The main example page is at `http://localhost:8080/test-examples/index.html`.
 -   **`npm run test`**: Tests the lightbox
 -   **`npm run lint`**: Lints the JavaScript and CSS files
--   **`npm run build`**: Creates a production-ready `dist` directory. Uses cssnano and rollup, see rollup's config in `rollup.config.js`
+-   **`npm run build`**: Creates a production-ready `dist` directory. Uses cssnano and rollup, see rollup's config in `rollup.config.mjs`
 
 ## Development Conventions
 
--   **Code Style**: The project uses eslint & prettier for JS and stylelint for CSS. See `.editorconfig`, `.eslint.config.mjs`, and `.stylelintrc.json` for rules.
+-   **Code Style**: The project uses eslint & prettier for JS and stylelint for CSS. See `.editorconfig`, `eslint.config.mjs`, and `.stylelintrc.json` for rules.

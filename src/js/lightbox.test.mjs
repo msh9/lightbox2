@@ -4,19 +4,12 @@
  *
  * @jest-environment: jsdom
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, jest } from '@jest/globals';
 import $ from 'jquery';
 import lightbox from './lightbox.mjs';
-import ExifReader from 'exifreader';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const examplesDir = path.resolve(__dirname, '../../test-examples');
-const withExifFile = path.join(examplesDir, 'ImgA.avif');
-const withoutExifFile = path.join(examplesDir, 'ImgD.avif');
+const firstFile = 'test-examples/ImgA.avif';
+const secondFile = 'test-examples/ImgD.avif';
 
 describe('Lightbox', () => {
   it('should export an object', () => {
@@ -146,11 +139,11 @@ describe('Lightbox', () => {
     beforeEach(() => {
       document.body.innerHTML
         = `<div> \
-          <a href="${withExifFile}" data-lightbox="multi-image" data-title="ImgA"> \ 
-            <img alt="ImgA" src="${withExifFile}" /> \ 
+          <a href="${firstFile}" data-lightbox="multi-image" data-title="ImgA"> \ 
+            <img alt="ImgA" src="${firstFile}" /> \ 
           </a> \ 
-          <a href="${withoutExifFile}" data-lightbox="multi-image" data-title="ImgD"> \ 
-            <img alt="ImgD" src="${withoutExifFile}" /> \ 
+          <a href="${secondFile}" data-lightbox="multi-image" data-title="ImgD"> \ 
+            <img alt="ImgD" src="${secondFile}" /> \ 
           </a> \ 
         </div>`;
       lightbox.build();
@@ -178,93 +171,85 @@ describe('Lightbox', () => {
       $('a[data-lightbox]').first().trigger('click');
 
       // Spot check
-      const expectedFirstLink = new URL(withExifFile, window.location.href).href;
-      const expectedSecondLink = new URL(withoutExifFile, window.location.href).href;
+      const expectedFirstLink = new URL(firstFile, window.location.href).href;
+      const expectedSecondLink = new URL(secondFile, window.location.href).href;
 
       expect(lightbox.album[0].link).toBe(expectedFirstLink);
       expect(lightbox.album[1].link).toBe(expectedSecondLink);
     });
   });
 
-  describe('exif integration', () => {
-    let expectedExifTags;
-
-    function setupAlbumWithOverrides({
-      src = 'examples/mock-image.avif',
-      title = 'the default title'
-    } = {}) {
+  describe('metadata attributes', () => {
+    function startWith(attributes, thumbnailAlt = 'Thumb alt') {
       document.body.innerHTML
-        = `<div> \ 
-          <a href="${src}" data-lightbox="test-single-exif" data-title="${title}"> \ 
-            <img alt="the alt" src="${src}" /> \ 
-          </a> \ 
-        </div>`;
-
-      /*
-        We still call #build #enable for click handler behavior, but we never call #start
-        in these tests so we need to manually set lightbox's album to have appropriate data.
-      */
+        = `<a href="full.jpg" data-lightbox="meta" ${attributes}><img alt="${thumbnailAlt}" src="thumb.jpg" /></a>`;
       lightbox.build();
-      lightbox.enable();
-      lightbox.album = [
-        {
-          link: src,
-          alt: 'the alt',
-          title
-        }
-      ];
+      jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
+      lightbox.start($('a[data-lightbox]'));
       lightbox.currentImageIndex = 0;
-    };
-
-    beforeAll(async () => {
-      const buffer = await fs.readFile(withExifFile);
-      expectedExifTags = await ExifReader.load(buffer);
-    });
+    }
 
     afterEach(() => {
       jest.restoreAllMocks();
       lightbox.album = [];
       lightbox.currentImageIndex = 0;
+      document.body.innerHTML = '';
     });
 
-    it('applies EXIF metadata from examples/ImgA.avif when available', async () => {
-      setupAlbumWithOverrides({ src: withExifFile });
+    it('reads title, caption, copyright and alt from data attributes', () => {
+      startWith('data-title="T" data-caption="C" data-copyright="© Me" data-alt="A"');
 
-      await lightbox.updateDetails();
-
-      const updated = lightbox.album[0];
-      expect(updated.title).toBe(expectedExifTags.title?.description);
-      expect(updated.copyright).toBe(expectedExifTags['Copyright']?.description);
-      expect($('.lb-title').text()).toBe(expectedExifTags.title?.description ?? '');
-      expect($('.lb-copyright').text()).toBe(expectedExifTags['Copyright']?.description ?? '');
-    });
-
-    it('preserves existing metadata when EXIF data is absent', async () => {
-      const newTitle = 'Album Provided Title';
-      setupAlbumWithOverrides({
-        src: withoutExifFile,
-        title: newTitle
+      expect(lightbox.album[0]).toMatchObject({
+        title: 'T',
+        caption: 'C',
+        copyright: '© Me',
+        alt: 'A'
       });
+    });
 
-      await lightbox.updateDetails();
+    it('falls back to the thumbnail alt when data-alt is absent', () => {
+      startWith('', 'From thumbnail');
 
-      const updated = lightbox.album[0];
-      expect(updated.copyright).toBeUndefined();
-      expect($('.lb-title').text()).toBe(newTitle);
-      expect($('.lb-copyright').text()).toBe('');
+      expect(lightbox.album[0].alt).toBe('From thumbnail');
+    });
+
+    it('honors an explicitly empty data-alt', () => {
+      startWith('data-alt=""', 'From thumbnail');
+
+      expect(lightbox.album[0].alt).toBe('');
+    });
+
+    it('renders every field and wires up aria references', () => {
+      startWith('data-title="T" data-caption="C" data-copyright="© Me"');
+
+      lightbox.updateDetails();
+
+      expect($('.lb-title').text()).toBe('T');
+      expect($('.lb-caption').text()).toBe('C');
+      expect($('.lb-copyright').text()).toBe('© Me');
+      expect($('#lightbox').attr('aria-labelledby')).toBe('lb-title');
+      expect($('.lb-image').attr('aria-describedby')).toBe('lb-caption lb-copyright');
+    });
+
+    it('hides missing fields and drops their aria references', () => {
+      startWith('data-caption="Only a caption"');
+
+      lightbox.updateDetails();
+
+      expect($('.lb-title').css('display')).toBe('none');
       expect($('.lb-copyright').css('display')).toBe('none');
+      expect($('.lb-caption').text()).toBe('Only a caption');
+      expect($('#lightbox').attr('aria-labelledby')).toBeUndefined();
+      expect($('.lb-image').attr('aria-describedby')).toBe('lb-caption');
     });
 
-    it('safely continues when the exifreader throws an exception', async () => {
-      const title = 'Provided Title';
-      setupAlbumWithOverrides({
-        src: 'foo!!!',
-        title
-      });
+    it('renders markup in metadata as plain text', () => {
+      startWith('data-title="&lt;b&gt;bold&lt;/b&gt;"');
 
-      await lightbox.updateDetails();
+      lightbox.updateDetails();
 
-      expect($('.lb-title').text()).toBe(title);
+      expect($('.lb-title').text()).toBe('<b>bold</b>');
+      expect($('.lb-title').find('b')).toHaveLength(0);
     });
   });
 });
