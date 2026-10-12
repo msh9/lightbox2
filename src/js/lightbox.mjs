@@ -1,58 +1,14 @@
 /*
  * SPDX-License-Identifier: MIT
  * Original work: © 2015-2025 Lokesh Dhakar
- * Modifications: © 2025 Michael Hughes
+ * Modifications: © 2025-2026 Michael Hughes
  *
  */
 import $ from 'jquery';
-
-const MIME_TYPES = {
-  avif: 'image/avif',
-  gif: 'image/gif',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  jxl: 'image/jxl',
-  png: 'image/png',
-  svg: 'image/svg+xml',
-  webp: 'image/webp'
-};
-
-// Guess an image MIME type from a URL's file extension. Browsers skip a <source> whose type they
-// cannot decode, which is what lets the fallback <img> take over.
-function mimeTypeFor(url) {
-  const extension = new URL(url).pathname.split('.').pop().toLowerCase();
-  return MIME_TYPES[extension];
-}
-
-// Point a <picture>'s <source> and <img> at an album entry. Without a fallback the <source> is
-// cleared so the <img> loads the link directly. A type hint from the page wins over guessing.
-function setPictureSources(source, img, image) {
-  if (image.fallback) {
-    const type = image.typeHint || mimeTypeFor(image.link);
-    source.srcset = image.link;
-    if (type) {
-      source.type = type;
-    } else {
-      source.removeAttribute('type');
-    }
-    img.src = image.fallback;
-  } else {
-    source.removeAttribute('srcset');
-    source.removeAttribute('type');
-    img.src = image.link;
-  }
-}
-
-// Load an album entry through a detached <picture> so the browser picks, and caches, the same
-// candidate the lightbox will display.
-function loadPicture(image) {
-  const picture = document.createElement('picture');
-  const source = document.createElement('source');
-  const img = document.createElement('img');
-  picture.append(source, img);
-  setPictureSources(source, img, image);
-  return img;
-}
+import { attachControls, handleKeyboard } from './actions.mjs';
+import { buildAlbum } from './album.mjs';
+import { fitImage, maxImageSize } from './layout.mjs';
+import { loadPicture, setPictureSources } from './picture.mjs';
 
 function Lightbox(options) {
   this.album = [];
@@ -115,8 +71,6 @@ Lightbox.prototype.build = function() {
     return;
   }
 
-  var self = this;
-
   // The two root notes generated, #lightboxOverlay and #lightbox are given
   // tabindex attrs so they are focusable. We attach our keyboard event
   // listeners to these two elements, and not the document. Clicking anywhere
@@ -154,123 +108,22 @@ Lightbox.prototype.build = function() {
     left: parseInt(this.$image.css('border-left-width'), 10)
   };
 
-  // Attach event handlers to the newly minted DOM elements
-  this.$overlay.hide().on('click', function() {
-    self.end();
-    return false;
-  });
+  this.$overlay.hide();
+  this.$lightbox.hide();
 
-  this.$lightbox.hide().on('click', function(event) {
-    if ($(event.target).attr('id') === 'lightbox') {
-      self.end();
-    }
-  });
-
-  this.$outerContainer.on('click', function(event) {
-    if ($(event.target).attr('id') === 'lightbox') {
-      self.end();
-    }
-    return false;
-  });
-
-  this.$lightbox.find('.lb-prev').on('click', function handleClickPrevious() {
-    if (self.currentImageIndex === 0) {
-      self.changeImage(self.album.length - 1);
-    } else {
-      self.changeImage(self.currentImageIndex - 1);
-    }
-    return false;
-  });
-
-  this.$lightbox.find('.lb-next').on('click', function handleClickNext() {
-    if (self.currentImageIndex === self.album.length - 1) {
-      self.changeImage(0);
-    } else {
-      self.changeImage(self.currentImageIndex + 1);
-    }
-    return false;
-  });
-
-  /*
-      Show context menu for image on right-click
-
-      There is a div containing the navigation that spans the entire image and lives above of it. If
-      you right-click, you are right clicking this div and not the image. This prevents users from
-      saving the image or using other context menu actions with the image.
-
-      To fix this, when we detect the right mouse button is pressed down, but not yet clicked, we
-      set pointer-events to none on the nav div. This is so that the upcoming right-click event on
-      the next mouseup will bubble down to the image. Once the right-click/contextmenu event occurs
-      we set the pointer events back to auto for the nav div so it can capture hover and left-click
-      events as usual.
-     */
-  this.$nav.on('mousedown', function(event) {
-    if (event.which === 3) {
-      self.$nav.css('pointer-events', 'none');
-
-      self.$lightbox.one('contextmenu', function() {
-        setTimeout(function() {
-          this.$nav.css('pointer-events', 'auto');
-        }.bind(self), 0);
-      });
-    }
-  });
-
-
-  this.$lightbox.find('.lb-loader, .lb-close').on('click keyup', function(e) {
-    // If mouse click OR 'enter' or 'space' keypress, close LB
-    if (
-      e.type === 'click' || (e.type === 'keyup' && (e.which === 13 || e.which === 32))) {
-      self.end();
-      return false;
-    }
-  });
+  attachControls(this);
 };
 
 // Show overlay and lightbox. If the image is part of a set, add siblings to album array.
 Lightbox.prototype.start = function($link) {
-  var self    = this;
   var $window = $(window);
 
   $window.on('resize', $.proxy(this.sizeOverlay, this));
 
   this.sizeOverlay();
 
-  this.album = [];
-  var imageNumber = 0;
-
-  function addToAlbum($link) {
-    // NB: Regarding link, we need the full URL as would be generated by the browser client and not the
-    // literal href attribute value.
-    const fallback = $link.attr('data-lb-href-fallback');
-    const width = parseInt($link.attr('data-lb-width'), 10);
-    const height = parseInt($link.attr('data-lb-height'), 10);
-    const hasDimensions = width > 0 && height > 0;
-    self.album.push({
-      alt: $link.attr('data-lb-alt') ?? $link.find('img').attr('alt') ?? '',
-      caption: $link.attr('data-lb-caption'),
-      copyright: $link.attr('data-lb-copyright'),
-      fallback: fallback ? new URL(fallback, document.baseURI).href : undefined,
-      height: hasDimensions ? height : undefined,
-      link: $link[0].href,
-      title: $link.attr('data-lb-title') || $link.attr('title'),
-      typeHint: $link.attr('data-lb-typehint-fallback') || undefined,
-      width: hasDimensions ? width : undefined
-    });
-  }
-
-  const dataLightboxValue = $link.attr('data-lightbox');
-  let $links;
-
-  if (dataLightboxValue) {
-    $links = $.find('[data-lightbox="' + dataLightboxValue + '"]');
-    for (var i = 0; i < $links.length; i = ++i) {
-      addToAlbum($($links[i]));
-      if ($links[i] === $link[0]) {
-        imageNumber = i;
-      }
-    }
-  }
+  const { album, index: imageNumber } = buildAlbum($link);
+  this.album = album;
 
   // Position Lightbox
   var top  = $window.scrollTop() + this.options.positionFromTop;
@@ -307,82 +160,26 @@ Lightbox.prototype.changeImage = function(imageNumber) {
   // When image to show is preloaded, we send the width and height to sizeContainer()
   const preloader = loadPicture(image);
   preloader.addEventListener('load', function imageSourceLoaded() {
-    var imageHeight;
-    var imageWidth;
-    var maxImageHeight;
-    var maxImageWidth;
-    var windowHeight;
-    var windowWidth;
-
     self.setImageSources(image);
 
     // Dimensions given in the markup take precedence, e.g. for SVGs without an intrinsic size.
-    var naturalWidth = image.width || preloader.naturalWidth;
-    var naturalHeight = image.height || preloader.naturalHeight;
+    const naturalWidth = image.width || preloader.naturalWidth;
+    const naturalHeight = image.height || preloader.naturalHeight;
 
-    $image.width(naturalWidth);
-    $image.height(naturalHeight);
-
-    var aspectRatio = naturalWidth / naturalHeight;
-
-    windowWidth = $(window).width();
-    windowHeight = $(window).height();
-
-    // Calculate the max image dimensions for the current viewport.
-    // Take into account the border around the image and an additional 10px gutter on each side.
-    maxImageWidth  = windowWidth - self.containerPadding.left - self.containerPadding.right - self.imageBorderWidth.left - self.imageBorderWidth.right - 20;
-    maxImageHeight = windowHeight - self.containerPadding.top - self.containerPadding.bottom - self.imageBorderWidth.top - self.imageBorderWidth.bottom - self.options.positionFromTop - 70;
-
-    /*
-      Since many SVGs have small intrinsic dimensions, but they support scaling
-      up without quality loss because of their vector format, max out their
-      size inside the viewport.
-      */
-    if (filetype === 'svg') {
-      if (aspectRatio >= 1) {
-        imageWidth = maxImageWidth;
-        imageHeight = parseInt(maxImageWidth / aspectRatio, 10);
-      } else {
-        imageWidth = parseInt(maxImageHeight / aspectRatio, 10);
-        imageHeight = maxImageHeight;
-      }
-      $image.width(imageWidth);
-      $image.height(imageHeight);
-
-    } else {
-
-      // Fit image inside the viewport.
-      if (self.options.fitImagesInViewport) {
-
-        // Check if image size is larger then maxWidth|maxHeight in settings
-        if (self.options.maxWidth && self.options.maxWidth < maxImageWidth) {
-          maxImageWidth = self.options.maxWidth;
-        }
-        if (self.options.maxHeight && self.options.maxHeight < maxImageHeight) {
-          maxImageHeight = self.options.maxHeight;
-        }
-
-      } else {
-        maxImageWidth = self.options.maxWidth || naturalWidth || maxImageWidth;
-        maxImageHeight = self.options.maxHeight || naturalHeight || maxImageHeight;
-      }
-
-      // Is the current image's width or height is greater than the maxImageWidth or maxImageHeight
-      // option than we need to size down while maintaining the aspect ratio.
-      if ((naturalWidth > maxImageWidth) || (naturalHeight > maxImageHeight)) {
-        if ((naturalWidth / maxImageWidth) > (naturalHeight / maxImageHeight)) {
-          imageWidth  = maxImageWidth;
-          imageHeight = parseInt(naturalHeight / (naturalWidth / imageWidth), 10);
-          $image.width(imageWidth);
-          $image.height(imageHeight);
-        } else {
-          imageHeight = maxImageHeight;
-          imageWidth = parseInt(naturalWidth / (naturalHeight / imageHeight), 10);
-          $image.width(imageWidth);
-          $image.height(imageHeight);
-        }
-      }
-    }
+    const max = maxImageSize(
+      { width: $(window).width(), height: $(window).height() },
+      self.containerPadding,
+      self.imageBorderWidth,
+      self.options.positionFromTop
+    );
+    const size = fitImage(
+      { width: naturalWidth, height: naturalHeight },
+      max,
+      filetype === 'svg',
+      self.options
+    );
+    $image.width(size.width);
+    $image.height(size.height);
 
     self.sizeContainer($image.width(), $image.height());
   });
@@ -426,8 +223,6 @@ Lightbox.prototype.sizeContainer = function(imageWidth, imageHeight) {
 
   function postResize() {
     self.$lightbox.find('.lb-data-container').width(newWidth);
-    self.$lightbox.find('.lb-prevLink').height(newHeight);
-    self.$lightbox.find('.lb-nextLink').height(newHeight);
 
     // Set focus on one of the two root nodes so keyboard events are captured.
     self.$overlay.trigger('focus');
@@ -555,28 +350,7 @@ Lightbox.prototype.disableKeyboardNav = function() {
 };
 
 Lightbox.prototype.keyboardAction = function(event) {
-  var KEYCODE_ESC        = 27;
-  var KEYCODE_LEFTARROW  = 37;
-  var KEYCODE_RIGHTARROW = 39;
-
-  var keycode = event.keyCode;
-  if (keycode === KEYCODE_ESC) {
-    // Prevent bubbling so as to not affect other components on the page.
-    event.stopPropagation();
-    this.end();
-  } else if (keycode === KEYCODE_LEFTARROW) {
-    if (this.currentImageIndex !== 0) {
-      this.changeImage(this.currentImageIndex - 1);
-    } else if (this.options.wrapAround && this.album.length > 1) {
-      this.changeImage(this.album.length - 1);
-    }
-  } else if (keycode === KEYCODE_RIGHTARROW) {
-    if (this.currentImageIndex !== this.album.length - 1) {
-      this.changeImage(this.currentImageIndex + 1);
-    } else if (this.options.wrapAround && this.album.length > 1) {
-      this.changeImage(0);
-    }
-  }
+  handleKeyboard(this, event);
 };
 
 // Closing time. :-(
