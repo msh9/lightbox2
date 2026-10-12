@@ -9,8 +9,8 @@ import lightbox from './lightbox.mjs';
 
 /*
   These tests drive the lightbox through the DOM, the way a page and its visitors would, so that
-  they keep holding while the implementation moves off jQuery. Page links live in a fixture
-  element; the lightbox's own markup is appended to <body> and persists between tests.
+  they hold regardless of how it is implemented. Page links live in a fixture element; the
+  lightbox's own markup is appended to <body> and persists between tests.
 */
 let fixture;
 
