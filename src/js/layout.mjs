@@ -6,18 +6,19 @@
  */
 
 // The largest image that fits in the viewport, leaving room for the container padding, the image
-// border, a 10px gutter on each side, the offset from the top, and the details bar below.
-export function maxImageSize(viewport, padding, border, positionFromTop) {
+// border, a 10px gutter on each side, a margin above, and the details bar below.
+export function maxImageSize(viewport, padding, border, marginTop) {
   return {
     width: viewport.width - padding.left - padding.right - border.left - border.right - 20,
-    height: viewport.height - padding.top - padding.bottom - border.top - border.bottom - positionFromTop - 70
+    height: viewport.height - padding.top - padding.bottom - border.top - border.bottom - marginTop - 70
   };
 }
 
-// Size an image for display within max, preserving its aspect ratio.
-export function fitImage(natural, max, isSvg, options) {
-  let maxWidth = max.width;
-  let maxHeight = max.height;
+// Size an image for display within max, preserving its aspect ratio. Images are only ever scaled
+// down, except SVGs.
+export function fitImage(natural, max, isSvg) {
+  const maxWidth = max.width;
+  const maxHeight = max.height;
 
   /*
     Since many SVGs have small intrinsic dimensions, but they support scaling
@@ -27,20 +28,6 @@ export function fitImage(natural, max, isSvg, options) {
   if (isSvg) {
     const scale = Math.min(maxWidth / natural.width, maxHeight / natural.height);
     return { width: parseInt(natural.width * scale, 10), height: parseInt(natural.height * scale, 10) };
-  }
-
-  // Fit image inside the viewport.
-  if (options.fitImagesInViewport) {
-    // Check if image size is larger then maxWidth|maxHeight in settings
-    if (options.maxWidth && options.maxWidth < maxWidth) {
-      maxWidth = options.maxWidth;
-    }
-    if (options.maxHeight && options.maxHeight < maxHeight) {
-      maxHeight = options.maxHeight;
-    }
-  } else {
-    maxWidth = options.maxWidth || natural.width || maxWidth;
-    maxHeight = options.maxHeight || natural.height || maxHeight;
   }
 
   // Is the current image's width or height is greater than the maxWidth or maxHeight

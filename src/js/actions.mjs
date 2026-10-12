@@ -4,8 +4,6 @@
  * Modifications: © 2025-2026 Michael Hughes
  *
  */
-import $ from 'jquery';
-
 const KEYCODE_ESC        = 27;
 const KEYCODE_LEFTARROW  = 37;
 const KEYCODE_RIGHTARROW = 39;
@@ -40,25 +38,14 @@ function showNext(lightbox, wrap) {
   }
 }
 
-// Attach handlers to the lightbox's own controls: the overlay, close and cancel buttons, and the
-// previous/next areas.
+// Attach handlers to the lightbox's own controls: the empty area around the image, the close and
+// cancel buttons, and the previous/next areas.
 export function attachControls(lightbox) {
-  lightbox.$overlay.on('click', function() {
-    lightbox.end();
-    return false;
-  });
-
+  // The dialog fills the viewport, so a click that lands on the dialog itself missed its content.
   lightbox.$lightbox.on('click', function(event) {
-    if ($(event.target).attr('id') === 'lightbox') {
+    if (event.target === lightbox.dialog) {
       lightbox.end();
     }
-  });
-
-  lightbox.$outerContainer.on('click', function(event) {
-    if ($(event.target).attr('id') === 'lightbox') {
-      lightbox.end();
-    }
-    return false;
   });
 
   // The previous/next areas are only shown when there is somewhere to go, so they always wrap.
@@ -97,13 +84,9 @@ export function attachControls(lightbox) {
     }
   });
 
-  lightbox.$lightbox.find('.lb-loader, .lb-close').on('click keyup', function(e) {
-    // If mouse click OR 'enter' or 'space' keypress, close LB
-    if (
-      e.type === 'click' || (e.type === 'keyup' && (e.which === 13 || e.which === 32))) {
-      lightbox.end();
-      return false;
-    }
+  // Buttons also click on Enter and Space.
+  lightbox.$lightbox.find('.lb-cancel, .lb-close').on('click', function() {
+    lightbox.end();
   });
 }
 

@@ -10,9 +10,59 @@ import { buildAlbum } from './album.mjs';
 import { fitImage, maxImageSize } from './layout.mjs';
 import { loadPicture, setPictureSources } from './picture.mjs';
 
+// Room kept free above the image when fitting it to the viewport.
+const VIEWPORT_MARGIN_TOP = 50;
+
+const TEMPLATE = `
+<dialog id="lightbox" class="lightbox" tabindex="-1" aria-label="Image viewer">
+  <div class="lb-outer-container">
+    <div class="lb-container">
+      <picture class="lb-picture"><source class="lb-source"><img class="lb-image" alt=""></picture>
+      <div class="lb-nav">
+        <button type="button" class="lb-prev" aria-label="Previous image" hidden></button>
+        <button type="button" class="lb-next" aria-label="Next image" hidden></button>
+      </div>
+      <div class="lb-loader"><button type="button" class="lb-cancel" aria-label="Close"></button></div>
+    </div>
+  </div>
+  <div class="lb-data-container">
+    <div class="lb-data">
+      <div class="lb-details">
+        <span class="lb-title" id="lb-title" hidden></span>
+        <span class="lb-caption" id="lb-caption" hidden></span>
+        <span class="lb-copyright" id="lb-copyright" hidden></span>
+        <span class="lb-number" hidden></span>
+      </div>
+      <div class="lb-closeContainer"><button type="button" class="lb-close" aria-label="Close"></button></div>
+    </div>
+  </div>
+</dialog>`;
+
+// Resolve once the element's CSS transition has run, or straight away when it has no duration
+// (for example under prefers-reduced-motion). The timer covers a transitionend that never fires.
+function afterTransition(element) {
+  const durations = getComputedStyle(element).transitionDuration.split(',').map(parseFloat);
+  const longest = Math.max(...durations) * 1000;
+  if (!(longest > 0)) {
+    return Promise.resolve();
+  }
+  return new Promise(function(resolve) {
+    let timer;
+    function done() {
+      clearTimeout(timer);
+      element.removeEventListener('transitionend', done);
+      resolve();
+    }
+    timer = setTimeout(done, longest + 100);
+    element.addEventListener('transitionend', done);
+  });
+}
+
 function Lightbox(options) {
   this.album = [];
   this.currentImageIndex = void 0;
+  // Incremented on every image change and on close, so that stale loads know to stop.
+  this.changeId = 0;
   this.init();
 
   // options
@@ -20,21 +70,11 @@ function Lightbox(options) {
   this.option(options);
 }
 
-// Descriptions of all options available on the demo site:
-// http://lokeshdhakar.com/projects/lightbox2/index.html#options
+// Fade and resize timings are CSS custom properties; see lightbox.css.
 Lightbox.defaults = {
   albumLabel: 'Image %1 of %2',
-  alwaysShowNavOnTouchDevices: false,
-  fadeDuration: 600,
-  fitImagesInViewport: true,
-  imageFadeDuration: 600,
-  // maxWidth: 800,
-  // maxHeight: 600,
-  positionFromTop: 50,
-  resizeDuration: 700,
   showImageNumberLabel: true,
-  wrapAround: false,
-  disableScrolling: false
+  wrapAround: false
 };
 
 Lightbox.prototype.option = function(options) {
@@ -64,127 +104,89 @@ Lightbox.prototype.enable = function() {
   });
 };
 
-// Build html for the lightbox and the overlay.
-// Attach event handlers to the new DOM elements. click click click
+// Build the lightbox <dialog> and attach its event handlers. Opened as a modal, the dialog
+// provides the backdrop, keeps focus and clicks inside it, and closes on Escape.
 Lightbox.prototype.build = function() {
   if ($('#lightbox').length > 0) {
     return;
   }
 
-  // The two root notes generated, #lightboxOverlay and #lightbox are given
-  // tabindex attrs so they are focusable. We attach our keyboard event
-  // listeners to these two elements, and not the document. Clicking anywhere
-  // while Lightbox is opened will keep the focus on or inside one of these
-  // two elements.
-  //
-  // We do this so we can prevent propagation of the Esc keypress when
-  // Lightbox is open. This prevents it from interfering with other components
-  // on the page below.
-  //
-  // Github issue: https://github.com/lokesh/lightbox2/issues/663
-  $('<div id="lightboxOverlay" tabindex="-1" class="lightbox-overlay"></div><div id="lightbox" tabindex="-1" class="lightbox" role="dialog" aria-modal="true" aria-label="Image viewer"><div class="lb-outer-container"><div class="lb-container"><picture class="lb-picture"><source class="lb-source"/><img class="lb-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==" alt=""/></picture><div class="lb-nav"><a class="lb-prev" role="button" tabindex="0" aria-label="Previous image" href="" ></a><a class="lb-next" role="button" tabindex="0" aria-label="Next image" href="" ></a></div><div class="lb-loader"><a class="lb-cancel" role="button" tabindex="0"></a></div></div></div><div class="lb-data-container"><div class="lb-data"><div class="lb-details"><span class="lb-title" id="lb-title"></span><span class="lb-caption" id="lb-caption"></span><span class="lb-copyright" id="lb-copyright"></span><span class="lb-number"></span></div><div class="lb-closeContainer"><a class="lb-close" role="button" tabindex="0"></a></div></div></div></div>').appendTo($('body'));
+  $(TEMPLATE).appendTo($('body'));
 
   // Cache jQuery objects
   this.$lightbox       = $('#lightbox');
-  this.$overlay        = $('#lightboxOverlay');
   this.$outerContainer = this.$lightbox.find('.lb-outer-container');
   this.$container      = this.$lightbox.find('.lb-container');
   this.$image          = this.$lightbox.find('.lb-image');
   this.$source         = this.$lightbox.find('.lb-source');
   this.$nav            = this.$lightbox.find('.lb-nav');
+  this.dialog          = this.$lightbox[0];
 
   // Store css values for future lookup
   this.containerPadding = {
-    top: parseInt(this.$container.css('padding-top'), 10),
-    right: parseInt(this.$container.css('padding-right'), 10),
-    bottom: parseInt(this.$container.css('padding-bottom'), 10),
-    left: parseInt(this.$container.css('padding-left'), 10)
+    top: parseInt(this.$container.css('padding-top'), 10) || 0,
+    right: parseInt(this.$container.css('padding-right'), 10) || 0,
+    bottom: parseInt(this.$container.css('padding-bottom'), 10) || 0,
+    left: parseInt(this.$container.css('padding-left'), 10) || 0
   };
 
   this.imageBorderWidth = {
-    top: parseInt(this.$image.css('border-top-width'), 10),
-    right: parseInt(this.$image.css('border-right-width'), 10),
-    bottom: parseInt(this.$image.css('border-bottom-width'), 10),
-    left: parseInt(this.$image.css('border-left-width'), 10)
+    top: parseInt(this.$image.css('border-top-width'), 10) || 0,
+    right: parseInt(this.$image.css('border-right-width'), 10) || 0,
+    bottom: parseInt(this.$image.css('border-bottom-width'), 10) || 0,
+    left: parseInt(this.$image.css('border-left-width'), 10) || 0
   };
 
-  this.$overlay.hide();
-  this.$lightbox.hide();
+  // Every way of closing, including Escape handled by the browser, ends with a close event.
+  this.dialog.addEventListener('close', this.cleanUp.bind(this));
 
   attachControls(this);
 };
 
-// Show overlay and lightbox. If the image is part of a set, add siblings to album array.
+// Open the lightbox at the clicked link, with the rest of its album available for navigation.
 Lightbox.prototype.start = function($link) {
-  var $window = $(window);
-
-  $window.on('resize', $.proxy(this.sizeOverlay, this));
-
-  this.sizeOverlay();
-
   const { album, index: imageNumber } = buildAlbum($link);
   this.album = album;
 
-  // Position Lightbox
-  var top  = $window.scrollTop() + this.options.positionFromTop;
-  var left = $window.scrollLeft();
-  this.$lightbox.css({
-    top: top + 'px',
-    left: left + 'px'
-  }).fadeIn(this.options.fadeDuration);
-
-  // Disable scrolling of the page while open
-  if (this.options.disableScrolling) {
-    $('body').addClass('lb-disable-scrolling');
+  if (!this.dialog.open) {
+    this.dialog.showModal();
+    // Focus the dialog itself so the keyboard works before any of its controls are shown.
+    this.dialog.focus();
   }
 
   this.changeImage(imageNumber);
 };
 
-// Hide most UI elements in preparation for the animated resizing of the lightbox.
+// Hide the current image, load the requested one, resize to fit it, and then show it.
 Lightbox.prototype.changeImage = function(imageNumber) {
-  var self = this;
-  var image = this.album[imageNumber];
-  var filetype = image.link.split('.').slice(-1)[0];
-  var $image = this.$lightbox.find('.lb-image');
+  const self = this;
+  const image = this.album[imageNumber];
+  const isSvg = image.link.split('.').slice(-1)[0] === 'svg';
+  const img = this.$image[0];
+  const changeId = ++this.changeId;
+
+  this.currentImageIndex = imageNumber;
 
   // Disable keyboard nav during transitions
   this.disableKeyboardNav();
+  this.dialog.dataset.state = 'loading';
 
-  // Show loading state
-  this.$overlay.fadeIn(this.options.fadeDuration);
-  $('.lb-loader').fadeIn('slow');
-  this.$lightbox.find('.lb-image, .lb-nav, .lb-prev, .lb-next, .lb-data-container, .lb-numbers').hide();
-  this.$outerContainer.addClass('animating');
+  this.setImageSources(image);
 
-  // When image to show is preloaded, we send the width and height to sizeContainer()
-  const preloader = loadPicture(image);
-  preloader.addEventListener('load', function imageSourceLoaded() {
-    self.setImageSources(image);
+  // With dimensions in the markup the resize can start while the image is still loading.
+  const resized = image.width && image.height ? this.sizeContainer(image.width, image.height, isSvg) : null;
 
-    // Dimensions given in the markup take precedence, e.g. for SVGs without an intrinsic size.
-    const naturalWidth = image.width || preloader.naturalWidth;
-    const naturalHeight = image.height || preloader.naturalHeight;
-
-    const max = maxImageSize(
-      { width: $(window).width(), height: $(window).height() },
-      self.containerPadding,
-      self.imageBorderWidth,
-      self.options.positionFromTop
-    );
-    const size = fitImage(
-      { width: naturalWidth, height: naturalHeight },
-      max,
-      filetype === 'svg',
-      self.options
-    );
-    $image.width(size.width);
-    $image.height(size.height);
-
-    self.sizeContainer($image.width(), $image.height());
+  // decode() rejects for broken images too; carry on regardless so the spinner never hangs.
+  img.decode().catch(function() {}).then(function() {
+    if (changeId !== self.changeId) {
+      return null;
+    }
+    return resized || self.sizeContainer(img.naturalWidth, img.naturalHeight, isSvg);
+  }).then(function() {
+    if (changeId === self.changeId) {
+      self.showImage();
+    }
   });
-
-  this.currentImageIndex = imageNumber;
 };
 
 // Show an album entry in the lightbox's <picture>.
@@ -193,93 +195,57 @@ Lightbox.prototype.setImageSources = function(image) {
   setPictureSources(this.$source[0], this.$image[0], image);
 };
 
-// Stretch overlay to fit the viewport
-Lightbox.prototype.sizeOverlay = function() {
-  var self = this;
-  /*
-    We use a setTimeout 0 to pause JS execution and let the rendering catch-up.
-    Why do this? If the `disableScrolling` option is set to true, a class is added to the body
-    tag that disables scrolling and hides the scrollbar. We want to make sure the scrollbar is
-    hidden before we measure the document width, as the presence of the scrollbar will affect the
-    number.
-    */
-  setTimeout(function() {
-    self.$overlay
-      .width($(document).width())
-      .height($(document).height());
+// Size the image to fit the viewport and resize the container around it. The container's size
+// change is animated in CSS; the returned promise resolves once it has finished.
+Lightbox.prototype.sizeContainer = function(naturalWidth, naturalHeight, isSvg) {
+  const outerContainer = this.$outerContainer[0];
+  const img = this.$image[0];
+  const max = maxImageSize(
+    { width: window.innerWidth, height: window.innerHeight },
+    this.containerPadding,
+    this.imageBorderWidth,
+    VIEWPORT_MARGIN_TOP
+  );
+  const size = fitImage({ width: naturalWidth, height: naturalHeight }, max, isSvg);
 
-  }, 0);
-};
+  img.style.width = size.width + 'px';
+  img.style.height = size.height + 'px';
 
-// Animate the size of the lightbox to fit the image we are showing
-// This method also shows the the image.
-Lightbox.prototype.sizeContainer = function(imageWidth, imageHeight) {
-  var self = this;
+  const newWidth = size.width + this.containerPadding.left + this.containerPadding.right + this.imageBorderWidth.left + this.imageBorderWidth.right;
+  const newHeight = size.height + this.containerPadding.top + this.containerPadding.bottom + this.imageBorderWidth.top + this.imageBorderWidth.bottom;
 
-  var oldWidth  = this.$outerContainer.outerWidth();
-  var oldHeight = this.$outerContainer.outerHeight();
-  var newWidth  = imageWidth + this.containerPadding.left + this.containerPadding.right + this.imageBorderWidth.left + this.imageBorderWidth.right;
-  var newHeight = imageHeight + this.containerPadding.top + this.containerPadding.bottom + this.imageBorderWidth.top + this.imageBorderWidth.bottom;
+  this.$lightbox.find('.lb-data-container')[0].style.width = newWidth + 'px';
 
-  function postResize() {
-    self.$lightbox.find('.lb-data-container').width(newWidth);
-
-    // Set focus on one of the two root nodes so keyboard events are captured.
-    self.$overlay.trigger('focus');
-
-    self.showImage();
+  if (outerContainer.offsetWidth === newWidth && outerContainer.offsetHeight === newHeight) {
+    return Promise.resolve();
   }
-
-  if (oldWidth !== newWidth || oldHeight !== newHeight) {
-    this.$outerContainer.animate({
-      width: newWidth,
-      height: newHeight
-    }, this.options.resizeDuration, 'swing', postResize);
-  } else {
-    postResize();
-  }
+  outerContainer.style.width = newWidth + 'px';
+  outerContainer.style.height = newHeight + 'px';
+  return afterTransition(outerContainer);
 };
 
 // Display the image and its details and begin preload neighboring images.
 Lightbox.prototype.showImage = function() {
-  this.$lightbox.find('.lb-loader').stop(true).hide();
-  this.$lightbox.find('.lb-image').fadeIn(this.options.imageFadeDuration);
-
   this.updateNav();
   this.updateDetails();
+  this.dialog.dataset.state = 'ready';
+
+  // Keep focus inside the dialog, e.g. when it was on the cancel button that just disappeared.
+  if (!this.dialog.contains(document.activeElement)) {
+    this.dialog.focus();
+  }
+
   this.preloadNeighboringImages();
   this.enableKeyboardNav();
 };
 
 // Display previous and next navigation if appropriate.
 Lightbox.prototype.updateNav = function() {
-  // Check to see if the browser supports touch events. If so, we take the conservative approach
-  // and assume that mouse hover events are not supported and always show prev/next navigation
-  // arrows in image sets.
-  const alwaysShowNav = this.options.alwaysShowNavOnTouchDevices;
-  this.$lightbox.find('.lb-nav').show();
+  const hasAlbum = this.album.length > 1;
+  const wrap = this.options.wrapAround;
 
-  if (this.album.length > 1) {
-    if (this.options.wrapAround) {
-      if (alwaysShowNav) {
-        this.$lightbox.find('.lb-prev, .lb-next').css('opacity', '1');
-      }
-      this.$lightbox.find('.lb-prev, .lb-next').show();
-    } else {
-      if (this.currentImageIndex > 0) {
-        this.$lightbox.find('.lb-prev').show();
-        if (alwaysShowNav) {
-          this.$lightbox.find('.lb-prev').css('opacity', '1');
-        }
-      }
-      if (this.currentImageIndex < this.album.length - 1) {
-        this.$lightbox.find('.lb-next').show();
-        if (alwaysShowNav) {
-          this.$lightbox.find('.lb-next').css('opacity', '1');
-        }
-      }
-    }
-  }
+  this.$lightbox.find('.lb-prev')[0].hidden = !(hasAlbum && (wrap || this.currentImageIndex > 0));
+  this.$lightbox.find('.lb-next')[0].hidden = !(hasAlbum && (wrap || this.currentImageIndex < this.album.length - 1));
 };
 
 // Display title, caption, copyright, image number, and closing button.
@@ -289,13 +255,10 @@ Lightbox.prototype.updateDetails = function() {
   const currentImage = this.album[this.currentImageIndex];
 
   function renderText(className, value) {
-    const $node = self.$lightbox.find('.' + className);
-    if (!value) {
-      $node.text('').hide();
-      return false;
-    }
-    $node.text(value).fadeIn('fast');
-    return true;
+    const node = self.$lightbox.find('.' + className)[0];
+    node.textContent = value || '';
+    node.hidden = !value;
+    return Boolean(value);
   }
 
   const hasTitle = renderText('lb-title', currentImage.title);
@@ -315,18 +278,8 @@ Lightbox.prototype.updateDetails = function() {
     this.$image.removeAttr('aria-describedby');
   }
 
-  if (this.album.length > 1 && this.options.showImageNumberLabel) {
-    var labelText = this.imageCountLabel(this.currentImageIndex + 1, this.album.length);
-    this.$lightbox.find('.lb-number').text(labelText).fadeIn('fast');
-  } else {
-    this.$lightbox.find('.lb-number').hide();
-  }
-
-  this.$outerContainer.removeClass('animating');
-
-  this.$lightbox.find('.lb-data-container').fadeIn(this.options.resizeDuration, function() {
-    return self.sizeOverlay();
-  });
+  const showNumber = this.album.length > 1 && this.options.showImageNumberLabel;
+  renderText('lb-number', showNumber ? this.imageCountLabel(this.currentImageIndex + 1, this.album.length) : '');
 };
 
 // Preload previous and next images in set.
@@ -341,12 +294,10 @@ Lightbox.prototype.preloadNeighboringImages = function() {
 
 Lightbox.prototype.enableKeyboardNav = function() {
   this.$lightbox.on('keyup.keyboard', $.proxy(this.keyboardAction, this));
-  this.$overlay.on('keyup.keyboard', $.proxy(this.keyboardAction, this));
 };
 
 Lightbox.prototype.disableKeyboardNav = function() {
   this.$lightbox.off('.keyboard');
-  this.$overlay.off('.keyboard');
 };
 
 Lightbox.prototype.keyboardAction = function(event) {
@@ -355,14 +306,15 @@ Lightbox.prototype.keyboardAction = function(event) {
 
 // Closing time. :-(
 Lightbox.prototype.end = function() {
-  this.disableKeyboardNav();
-  $(window).off('resize', this.sizeOverlay);
-  this.$lightbox.fadeOut(this.options.fadeDuration);
-  this.$overlay.fadeOut(this.options.fadeDuration);
-
-  if (this.options.disableScrolling) {
-    $('body').removeClass('lb-disable-scrolling');
+  if (this.dialog.open) {
+    this.dialog.close();
   }
+};
+
+// Runs however the dialog was closed. Abandons any image that is still loading.
+Lightbox.prototype.cleanUp = function() {
+  this.changeId++;
+  this.disableKeyboardNav();
 };
 
 export default new Lightbox();

@@ -5,6 +5,8 @@ Fork of Lightbox2 originally by [Lokesh Dhakar](https://github.com/lokesh/lightb
 This fork differs from the original in a few ways:
 
 - Title, caption, and copyright are read from data attributes (see below) and always rendered as plain text. The `sanitizeTitle` option has been removed.
+- The lightbox is a native modal `<dialog>`, which provides the backdrop, focus handling, closing on Escape, and keeps the page from scrolling behind it. Fades and resizing are CSS transitions.
+- Only the `albumLabel`, `showImageNumberLabel`, and `wrapAround` options remain. Images always fit the viewport, and the previous/next controls are always visible on devices without hover.
 - Updates the build toolchain with more recent tools, tests, and linters.
 
 ## Usage
@@ -35,6 +37,33 @@ If the `href` has no recognizable extension (for example an image served from a 
 `data-lb-width` and `data-lb-height` are optional. When both are present they are used instead of the loaded image's intrinsic size.
 
 Every metadata attribute is optional and missing fields are hidden. When `data-lb-alt` is absent, the thumbnail's `alt` is used. The title labels the lightbox dialog, and the caption and copyright describe the image for assistive technology.
+
+When both dimensions are given the lightbox resizes to them while the image is still loading, instead of waiting to measure it.
+
+## Options
+
+```js
+lightbox.option({
+  albumLabel: 'Image %1 of %2', // %1 is the current image number, %2 the album size
+  showImageNumberLabel: true,
+  wrapAround: false // whether navigation continues from the last image to the first and back
+});
+```
+
+## Styling
+
+Timings and the backdrop color are CSS custom properties on `.lightbox`. They drop to `0s` when the visitor prefers reduced motion.
+
+```css
+.lightbox {
+  --lb-fade-duration: 0.6s;       /* opening and closing */
+  --lb-image-fade-duration: 0.6s; /* each image and its details */
+  --lb-resize-duration: 0.7s;     /* resizing between images */
+  --lb-backdrop-color: rgb(0 0 0 / 80%);
+}
+```
+
+Fades on opening and closing use `@starting-style` and `transition-behavior: allow-discrete`; browsers without them open and close instantly.
 
 ## Local development
 
