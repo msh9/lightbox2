@@ -30,6 +30,8 @@ To serve a modern format with a fallback, point `href` at the preferred image an
 </a>
 ```
 
+If the `href` has no recognizable extension (for example an image served from a query-string URL), or you want to state the type explicitly, add `data-lb-typehint-fallback` with the MIME type of the `href` image, e.g. `data-lb-typehint-fallback="image/avif"`. The hint takes precedence over the extension.
+
 `data-lb-width` and `data-lb-height` are optional. When both are present they are used instead of the loaded image's intrinsic size.
 
 Every metadata attribute is optional and missing fields are hidden. When `data-lb-alt` is absent, the thumbnail's `alt` is used. The title labels the lightbox dialog, and the caption and copyright describe the image for assistive technology.

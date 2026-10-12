@@ -294,6 +294,29 @@ describe('Lightbox', () => {
       expect($('.lb-image').attr('alt')).toBe('Full');
     });
 
+    it('prefers a page-supplied type hint over the file extension', () => {
+      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-typehint-fallback="image/jxl"');
+
+      expect(image.typeHint).toBe('image/jxl');
+
+      lightbox.setImageSources(image);
+
+      expect($('#lightbox .lb-source').attr('type')).toBe('image/jxl');
+    });
+
+    it('uses the type hint for links without a recognizable extension', () => {
+      lightbox.build();
+
+      lightbox.setImageSources({
+        alt: '',
+        link: 'http://localhost/image?id=1',
+        fallback: 'http://localhost/image.jpg',
+        typeHint: 'image/avif'
+      });
+
+      expect($('#lightbox .lb-source').attr('type')).toBe('image/avif');
+    });
+
     it('omits the type for unrecognized extensions', () => {
       lightbox.build();
 

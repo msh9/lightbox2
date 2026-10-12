@@ -25,10 +25,10 @@ function mimeTypeFor(url) {
 }
 
 // Point a <picture>'s <source> and <img> at an album entry. Without a fallback the <source> is
-// cleared so the <img> loads the link directly.
+// cleared so the <img> loads the link directly. A type hint from the page wins over guessing.
 function setPictureSources(source, img, image) {
   if (image.fallback) {
-    const type = mimeTypeFor(image.link);
+    const type = image.typeHint || mimeTypeFor(image.link);
     source.srcset = image.link;
     if (type) {
       source.type = type;
@@ -254,6 +254,7 @@ Lightbox.prototype.start = function($link) {
       height: hasDimensions ? height : undefined,
       link: $link[0].href,
       title: $link.attr('data-lb-title') || $link.attr('title'),
+      typeHint: $link.attr('data-lb-typehint-fallback') || undefined,
       width: hasDimensions ? width : undefined
     });
   }
