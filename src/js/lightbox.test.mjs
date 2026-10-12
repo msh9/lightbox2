@@ -1,340 +1,414 @@
 /*
  * SPDX-License-Identifier: MIT
- * Copyright 2025 Michael Hughes
+ * Copyright 2025-2026 Michael Hughes
  *
  * @jest-environment: jsdom
  */
-import { afterEach, beforeEach, describe, expect, jest } from '@jest/globals';
-import $ from 'jquery';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import lightbox from './lightbox.mjs';
 
-const firstFile = 'test-examples/ImgA.avif';
-const secondFile = 'test-examples/ImgD.avif';
+/*
+  These tests drive the lightbox through the DOM, the way a page and its visitors would, so that
+  they keep holding while the implementation moves off jQuery. Page links live in a fixture
+  element; the lightbox's own markup is appended to <body> and persists between tests.
+*/
+let fixture;
 
-describe('Lightbox', () => {
-  it('should export an object', () => {
+function render(html) {
+  fixture.innerHTML = html;
+}
+
+function links() {
+  return [...fixture.querySelectorAll('a[data-lightbox]')];
+}
+
+function $q(selector) {
+  return document.querySelector(selector);
+}
+
+function click(element) {
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+  element.dispatchEvent(event);
+  return event;
+}
+
+function keyup(element, key, keyCode) {
+  // Browsers derive the legacy which from keyCode; jsdom needs both spelled out.
+  const event = new KeyboardEvent('keyup', { key, keyCode, which: keyCode, bubbles: true, cancelable: true });
+  element.dispatchEvent(event);
+  return event;
+}
+
+function isHidden(element) {
+  return getComputedStyle(element).display === 'none';
+}
+
+beforeAll(async () => {
+  // Importing the module initializes it (enable, then build) once the DOM is ready, a few ticks
+  // later. The lightbox markup appearing means both steps have run.
+  for (let tries = 0; !$q('#lightbox') && tries < 100; tries++) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  fixture = document.createElement('div');
+  document.body.append(fixture);
+});
+
+let changeImageSpy;
+
+beforeEach(() => {
+  // Image loading never completes in jsdom, so stop at changeImage and only record the position.
+  changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(function(index) {
+    this.currentImageIndex = index;
+  });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  fixture.innerHTML = '';
+  lightbox.album = [];
+  lightbox.currentImageIndex = 0;
+});
+
+describe('setup', () => {
+  it('exports an object', () => {
     expect(typeof lightbox).toBe('object');
     expect(lightbox).not.toBeNull();
   });
 
-  describe('build', () => {
-    it('should add lightbox HTML to the DOM', () => {
-      expect($('#lightbox')).toHaveLength(0);
-      expect($('#lightboxOverlay')).toHaveLength(0);
+  it('adds the lightbox and overlay to the page exactly once', () => {
+    lightbox.build();
 
-      lightbox.build();
+    expect(document.querySelectorAll('#lightbox')).toHaveLength(1);
+    expect(document.querySelectorAll('#lightboxOverlay')).toHaveLength(1);
+  });
 
-      expect($('#lightbox')).toHaveLength(1);
-      expect($('#lightboxOverlay')).toHaveLength(1);
-    });
+  it('starts hidden', () => {
+    expect(isHidden($q('#lightbox'))).toBe(true);
+    expect(isHidden($q('#lightboxOverlay'))).toBe(true);
+  });
+});
 
-    it('should not add lightbox HTML to the DOM if it already exists', () => {
-      lightbox.build();
-      expect($('#lightbox')).toHaveLength(1);
+describe('opening', () => {
+  it('opens at the clicked link', () => {
+    render('<a href="image.jpg" data-lightbox="single"><img alt="Thumb" src="thumb.jpg" /></a>');
 
-      const appendToSpy = jest.spyOn($.fn, 'appendTo');
+    click(links()[0]);
 
-      lightbox.build();
+    expect(changeImageSpy).toHaveBeenCalledTimes(1);
+    expect(changeImageSpy).toHaveBeenCalledWith(0);
+  });
 
-      expect(appendToSpy).not.toHaveBeenCalled();
+  it('prevents navigation and stops the click from propagating', () => {
+    render('<a href="image.jpg" data-lightbox="single"><img alt="Thumb" src="thumb.jpg" /></a>');
+    const documentListener = jest.fn();
+    document.addEventListener('click', documentListener);
 
-      // We should still only have one lightbox.
-      expect($('#lightbox')).toHaveLength(1);
+    const event = click(links()[0]);
 
-      appendToSpy.mockRestore();
+    expect(event.defaultPrevented).toBe(true);
+    expect(documentListener).not.toHaveBeenCalled();
+    document.removeEventListener('click', documentListener);
+  });
+
+  it('opens when a child of the link, such as the thumbnail, is clicked', () => {
+    render('<a href="image.jpg" data-lightbox="single"><img alt="Thumb" src="thumb.jpg" /></a>');
+
+    click(fixture.querySelector('img'));
+
+    expect(changeImageSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('ignores links without data-lightbox', () => {
+    render('<a href="image.jpg"><img alt="Thumb" src="thumb.jpg" /></a>');
+
+    click(fixture.querySelector('a'));
+
+    expect(changeImageSpy).not.toHaveBeenCalled();
+  });
+
+  it('works for links without an image child', () => {
+    render('<a href="full/image-only.jpg" data-lightbox="solo">Open</a>');
+
+    click(links()[0]);
+
+    expect(lightbox.album[0].link).toBe(links()[0].href);
+    expect(changeImageSpy).toHaveBeenCalledWith(0);
+  });
+});
+
+describe('albums', () => {
+  beforeEach(() => {
+    render(`
+      <a href="full/a.jpg" data-lightbox="set"><img alt="A" src="thumb/a.jpg" /></a>
+      <a href="full/other.jpg" data-lightbox="other"><img alt="Other" src="thumb/other.jpg" /></a>
+      <a href="full/b.jpg" data-lightbox="set"><img alt="B" src="thumb/b.jpg" /></a>
+      <a href="full/c.jpg" data-lightbox="set"><img alt="C" src="thumb/c.jpg" /></a>
+    `);
+  });
+
+  it('groups links sharing a data-lightbox value, in document order', () => {
+    click(links()[0]);
+
+    expect(lightbox.album.map((image) => image.link)).toEqual([
+      new URL('full/a.jpg', document.baseURI).href,
+      new URL('full/b.jpg', document.baseURI).href,
+      new URL('full/c.jpg', document.baseURI).href
+    ]);
+  });
+
+  it('uses the full-size href rather than the thumbnail', () => {
+    click(links()[0]);
+
+    expect(lightbox.album[0].link).toBe(links()[0].href);
+    expect(lightbox.album[0].link).not.toBe(links()[0].querySelector('img').src);
+  });
+
+  it('opens at the clicked link\'s position in its album', () => {
+    click(links()[2]);
+
+    expect(lightbox.album).toHaveLength(3);
+    expect(changeImageSpy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('controls', () => {
+  let endSpy;
+
+  beforeEach(() => {
+    render(`
+      <a href="a.jpg" data-lightbox="set">A</a>
+      <a href="b.jpg" data-lightbox="set">B</a>
+      <a href="c.jpg" data-lightbox="set">C</a>
+    `);
+    endSpy = jest.spyOn(lightbox, 'end').mockImplementation(() => {});
+    click(links()[1]);
+    changeImageSpy.mockClear();
+  });
+
+  it('moves with the previous and next controls', () => {
+    click($q('#lightbox .lb-prev'));
+    expect(changeImageSpy).toHaveBeenLastCalledWith(0);
+
+    click($q('#lightbox .lb-next'));
+    expect(changeImageSpy).toHaveBeenLastCalledWith(1);
+  });
+
+  it('closes when the overlay is clicked', () => {
+    click($q('#lightboxOverlay'));
+
+    expect(endSpy).toHaveBeenCalled();
+  });
+
+  it('closes when the empty area around the image is clicked', () => {
+    click($q('#lightbox'));
+
+    expect(endSpy).toHaveBeenCalled();
+  });
+
+  it('stays open when the image itself is clicked', () => {
+    click($q('#lightbox .lb-image'));
+
+    expect(endSpy).not.toHaveBeenCalled();
+  });
+
+  it('closes from the close button by click, Enter, or Space', () => {
+    const close = $q('#lightbox .lb-close');
+
+    click(close);
+    keyup(close, 'Enter', 13);
+    keyup(close, ' ', 32);
+
+    expect(endSpy).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('keyboard', () => {
+  let endSpy;
+
+  beforeEach(() => {
+    render(`
+      <a href="a.jpg" data-lightbox="set">A</a>
+      <a href="b.jpg" data-lightbox="set">B</a>
+      <a href="c.jpg" data-lightbox="set">C</a>
+    `);
+    endSpy = jest.spyOn(lightbox, 'end').mockImplementation(() => {});
+    click(links()[1]);
+    changeImageSpy.mockClear();
+    // Keyboard navigation turns on once an image has been shown.
+    lightbox.enableKeyboardNav();
+  });
+
+  afterEach(() => {
+    lightbox.disableKeyboardNav();
+  });
+
+  it('moves with the arrow keys', () => {
+    keyup($q('#lightbox'), 'ArrowLeft', 37);
+    expect(changeImageSpy).toHaveBeenLastCalledWith(0);
+
+    keyup($q('#lightbox'), 'ArrowRight', 39);
+    expect(changeImageSpy).toHaveBeenLastCalledWith(1);
+  });
+
+  it('closes on Escape without letting the key reach the page', () => {
+    const documentListener = jest.fn();
+    document.addEventListener('keyup', documentListener);
+
+    keyup($q('#lightbox'), 'Escape', 27);
+
+    expect(endSpy).toHaveBeenCalled();
+    expect(documentListener).not.toHaveBeenCalled();
+    document.removeEventListener('keyup', documentListener);
+  });
+
+  it('ignores keys while navigation is disabled', () => {
+    lightbox.disableKeyboardNav();
+
+    keyup($q('#lightbox'), 'ArrowRight', 39);
+
+    expect(changeImageSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('metadata attributes', () => {
+  function openWith(attributes, thumbnailAlt = 'Thumb alt') {
+    render(`<a href="full.jpg" data-lightbox="meta" ${attributes}><img alt="${thumbnailAlt}" src="thumb.jpg" /></a>`);
+    click(links()[0]);
+    return lightbox.album[0];
+  }
+
+  it('reads title, caption, copyright and alt from data attributes', () => {
+    const image = openWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me" data-lb-alt="A"');
+
+    expect(image).toMatchObject({
+      title: 'T',
+      caption: 'C',
+      copyright: '© Me',
+      alt: 'A'
     });
   });
 
-  describe('single image handling', () => {
-    const title = 'Single Title';
-    const altCaption = 'Single Caption';
-    let changeImageSpy ;
-    beforeEach(() => {
-      document.body.innerHTML
-        = `<div> \ 
-          <a href="image.jpg" data-lightbox="test-single" data-lb-title="${title}"> \ 
-            <img alt="${altCaption}" src="foo.jpg" /> \ 
-          </a> \ 
-        </div>`;
-      lightbox.build();
-      lightbox.enable();
-      changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-    });
-
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
-    it('should call start when a lightbox link is clicked', () => {
-      const link = $('a[data-lightbox]');
-
-      link.trigger('click');
-
-      expect(changeImageSpy).toHaveBeenCalled();
-      expect(changeImageSpy).toHaveBeenCalledWith(0);
-    });
-
-    it('should prevent default action and stop propagation', () => {
-      jest.spyOn(lightbox, 'start').mockImplementation(() => {});
-      const link = $('a[data-lightbox]');
-      const event = new $.Event('click');
-
-      link.trigger(event);
-
-      expect(event.isDefaultPrevented()).toBe(true);
-      expect(event.isPropagationStopped()).toBe(true);
-    });
+  it('falls back to the thumbnail alt when data-lb-alt is absent', () => {
+    expect(openWith('', 'From thumbnail').alt).toBe('From thumbnail');
   });
 
-  describe('start', () => {
-    afterEach(() => {
-      jest.restoreAllMocks();
-      lightbox.album = [];
-      lightbox.currentImageIndex = 0;
-      document.body.innerHTML = '';
-    });
-
-    it('uses the anchor href target when building the album', () => {
-      document.body.innerHTML
-        = '<div> \
-          <a href="full/image-a.jpg" data-lightbox="album"> \
-            <img alt="Thumb A" src="thumb/thumb-a.jpg" /> \
-          </a> \
-          <a href="full/image-b.jpg" data-lightbox="album"> \
-            <img alt="Thumb B" src="thumb/thumb-b.jpg" /> \
-          </a> \
-        </div>';
-
-      lightbox.build();
-
-      const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-      const firstLink = $('a[data-lightbox]').first();
-
-      lightbox.start(firstLink);
-
-      expect(lightbox.album[0].link).toBe(firstLink[0].href);
-      expect(lightbox.album[0].link).not.toBe(firstLink.find('img')[0].src);
-      expect(lightbox.album).toHaveLength(2);
-      expect(changeImageSpy).toHaveBeenCalledWith(0);
-    });
-
-    it('does not throw when the anchor lacks an image child', () => {
-      document.body.innerHTML
-        = '<div> \
-          <a href="full/image-only.jpg" data-lightbox="solo">Open</a> \
-        </div>';
-
-      lightbox.build();
-
-      const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-      const link = $('a[data-lightbox]').first();
-
-      expect(() => lightbox.start(link)).not.toThrow();
-      expect(lightbox.album[0].link).toBe(link[0].href);
-      expect(changeImageSpy).toHaveBeenCalledWith(0);
-    });
+  it('honors an explicitly empty data-lb-alt', () => {
+    expect(openWith('data-lb-alt=""', 'From thumbnail').alt).toBe('');
   });
 
-  describe('multi-image album', () => {
-    beforeEach(() => {
-      document.body.innerHTML
-        = `<div> \
-          <a href="${firstFile}" data-lightbox="multi-image" data-lb-title="ImgA"> \ 
-            <img alt="ImgA" src="${firstFile}" /> \ 
-          </a> \ 
-          <a href="${secondFile}" data-lightbox="multi-image" data-lb-title="ImgD"> \ 
-            <img alt="ImgD" src="${secondFile}" /> \ 
-          </a> \ 
-        </div>`;
-      lightbox.build();
-      lightbox.enable();
-    });
+  it('renders every field and wires up aria references', () => {
+    openWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me"');
 
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
+    lightbox.updateDetails();
 
-    it('should create an album and call changeImage with the correct index', async () => {
-      const changeImageSpy = jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-
-      // Click the second image in the album
-      const secondLink = $('a[data-lightbox]').eq(1);
-      secondLink.trigger('click');
-
-      expect(lightbox.album).toHaveLength(2);
-      expect(changeImageSpy).toHaveBeenCalledWith(1);
-    });
-
-    it('should populate the album with correct data', async () => {
-      jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-
-      $('a[data-lightbox]').first().trigger('click');
-
-      // Spot check
-      const expectedFirstLink = new URL(firstFile, window.location.href).href;
-      const expectedSecondLink = new URL(secondFile, window.location.href).href;
-
-      expect(lightbox.album[0].link).toBe(expectedFirstLink);
-      expect(lightbox.album[1].link).toBe(expectedSecondLink);
-    });
+    expect($q('#lightbox .lb-title').textContent).toBe('T');
+    expect($q('#lightbox .lb-caption').textContent).toBe('C');
+    expect($q('#lightbox .lb-copyright').textContent).toBe('© Me');
+    expect($q('#lightbox').getAttribute('aria-labelledby')).toBe('lb-title');
+    expect($q('#lightbox .lb-image').getAttribute('aria-describedby')).toBe('lb-caption lb-copyright');
   });
 
-  describe('metadata attributes', () => {
-    function startWith(attributes, thumbnailAlt = 'Thumb alt') {
-      document.body.innerHTML
-        = `<a href="full.jpg" data-lightbox="meta" ${attributes}><img alt="${thumbnailAlt}" src="thumb.jpg" /></a>`;
-      lightbox.build();
-      jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-      lightbox.start($('a[data-lightbox]'));
-      lightbox.currentImageIndex = 0;
-    }
+  it('hides missing fields and drops their aria references', () => {
+    openWith('data-lb-caption="Only a caption"');
 
-    afterEach(() => {
-      jest.restoreAllMocks();
-      lightbox.album = [];
-      lightbox.currentImageIndex = 0;
-      document.body.innerHTML = '';
-    });
+    lightbox.updateDetails();
 
-    it('reads title, caption, copyright and alt from data attributes', () => {
-      startWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me" data-lb-alt="A"');
-
-      expect(lightbox.album[0]).toMatchObject({
-        title: 'T',
-        caption: 'C',
-        copyright: '© Me',
-        alt: 'A'
-      });
-    });
-
-    it('falls back to the thumbnail alt when data-lb-alt is absent', () => {
-      startWith('', 'From thumbnail');
-
-      expect(lightbox.album[0].alt).toBe('From thumbnail');
-    });
-
-    it('honors an explicitly empty data-lb-alt', () => {
-      startWith('data-lb-alt=""', 'From thumbnail');
-
-      expect(lightbox.album[0].alt).toBe('');
-    });
-
-    it('renders every field and wires up aria references', () => {
-      startWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me"');
-
-      lightbox.updateDetails();
-
-      expect($('.lb-title').text()).toBe('T');
-      expect($('.lb-caption').text()).toBe('C');
-      expect($('.lb-copyright').text()).toBe('© Me');
-      expect($('#lightbox').attr('aria-labelledby')).toBe('lb-title');
-      expect($('.lb-image').attr('aria-describedby')).toBe('lb-caption lb-copyright');
-    });
-
-    it('hides missing fields and drops their aria references', () => {
-      startWith('data-lb-caption="Only a caption"');
-
-      lightbox.updateDetails();
-
-      expect($('.lb-title').css('display')).toBe('none');
-      expect($('.lb-copyright').css('display')).toBe('none');
-      expect($('.lb-caption').text()).toBe('Only a caption');
-      expect($('#lightbox').attr('aria-labelledby')).toBeUndefined();
-      expect($('.lb-image').attr('aria-describedby')).toBe('lb-caption');
-    });
-
-    it('renders markup in metadata as plain text', () => {
-      startWith('data-lb-title="&lt;b&gt;bold&lt;/b&gt;"');
-
-      lightbox.updateDetails();
-
-      expect($('.lb-title').text()).toBe('<b>bold</b>');
-      expect($('.lb-title').find('b')).toHaveLength(0);
-    });
+    expect(isHidden($q('#lightbox .lb-title'))).toBe(true);
+    expect(isHidden($q('#lightbox .lb-copyright'))).toBe(true);
+    expect($q('#lightbox .lb-caption').textContent).toBe('Only a caption');
+    expect($q('#lightbox').hasAttribute('aria-labelledby')).toBe(false);
+    expect($q('#lightbox .lb-image').getAttribute('aria-describedby')).toBe('lb-caption');
   });
 
-  describe('picture sources', () => {
-    function startWith(attributes) {
-      document.body.innerHTML
-        = `<a href="full.avif" data-lightbox="pictures" ${attributes}><img alt="Thumb" src="thumb.jpg" /></a>`;
-      lightbox.build();
-      jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
-      lightbox.start($('a[data-lightbox]'));
-      return lightbox.album[0];
-    }
+  it('renders markup in metadata as plain text', () => {
+    openWith('data-lb-title="&lt;b&gt;bold&lt;/b&gt;"');
 
-    afterEach(() => {
-      jest.restoreAllMocks();
-      lightbox.album = [];
-      document.body.innerHTML = '';
+    lightbox.updateDetails();
+
+    expect($q('#lightbox .lb-title').textContent).toBe('<b>bold</b>');
+    expect($q('#lightbox .lb-title b')).toBeNull();
+  });
+
+  it('labels the image count only for albums', () => {
+    openWith('');
+    lightbox.updateDetails();
+    expect(isHidden($q('#lightbox .lb-number'))).toBe(true);
+
+    render('<a href="a.jpg" data-lightbox="set">A</a><a href="b.jpg" data-lightbox="set">B</a>');
+    click(links()[1]);
+    lightbox.updateDetails();
+    expect($q('#lightbox .lb-number').textContent).toBe('Image 2 of 2');
+  });
+});
+
+describe('picture sources', () => {
+  function openWith(attributes) {
+    render(`<a href="full.avif" data-lightbox="pictures" ${attributes}><img alt="Thumb" src="thumb.jpg" /></a>`);
+    click(links()[0]);
+    return lightbox.album[0];
+  }
+
+  const source = () => $q('#lightbox .lb-source');
+  const image = () => $q('#lightbox .lb-image');
+
+  it('resolves the fallback href and reads dimensions', () => {
+    const entry = openWith('data-lb-href-fallback="full.jpg" data-lb-width="1200" data-lb-height="800"');
+
+    expect(entry.fallback).toBe(new URL('full.jpg', document.baseURI).href);
+    expect(entry.width).toBe(1200);
+    expect(entry.height).toBe(800);
+  });
+
+  it('ignores incomplete or invalid dimensions', () => {
+    expect(openWith('data-lb-width="1200"')).toMatchObject({ width: undefined, height: undefined });
+    expect(openWith('data-lb-width="wide" data-lb-height="800"')).toMatchObject({ width: undefined, height: undefined });
+  });
+
+  it('offers the link as a typed source with the fallback on the img', () => {
+    const entry = openWith('data-lb-href-fallback="full.jpg" data-lb-alt="Full"');
+
+    lightbox.setImageSources(entry);
+
+    expect(source().getAttribute('srcset')).toBe(entry.link);
+    expect(source().getAttribute('type')).toBe('image/avif');
+    expect(image().src).toBe(entry.fallback);
+    expect(image().alt).toBe('Full');
+  });
+
+  it('prefers a page-supplied type hint over the file extension', () => {
+    const entry = openWith('data-lb-href-fallback="full.jpg" data-lb-typehint-fallback="image/jxl"');
+
+    lightbox.setImageSources(entry);
+
+    expect(entry.typeHint).toBe('image/jxl');
+    expect(source().getAttribute('type')).toBe('image/jxl');
+  });
+
+  it('uses the type hint for links without a recognizable extension', () => {
+    lightbox.setImageSources({
+      alt: '',
+      link: 'http://localhost/image?id=1',
+      fallback: 'http://localhost/image.jpg',
+      typeHint: 'image/avif'
     });
 
-    it('resolves the fallback href and reads dimensions', () => {
-      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-width="1200" data-lb-height="800"');
+    expect(source().getAttribute('type')).toBe('image/avif');
+  });
 
-      expect(image.fallback).toBe(new URL('full.jpg', document.baseURI).href);
-      expect(image.width).toBe(1200);
-      expect(image.height).toBe(800);
-    });
+  it('omits the type for unrecognized extensions', () => {
+    lightbox.setImageSources({ alt: '', link: 'http://localhost/image.unknown', fallback: 'http://localhost/image.jpg' });
 
-    it('ignores incomplete or invalid dimensions', () => {
-      expect(startWith('data-lb-width="1200"')).toMatchObject({ width: undefined, height: undefined });
-      expect(startWith('data-lb-width="wide" data-lb-height="800"')).toMatchObject({ width: undefined, height: undefined });
-    });
+    expect(source().hasAttribute('type')).toBe(false);
+  });
 
-    it('offers the link as a typed source with the fallback on the img', () => {
-      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-alt="Full"');
+  it('clears the source when an image has no fallback', () => {
+    lightbox.setImageSources(openWith('data-lb-href-fallback="full.jpg"'));
 
-      lightbox.setImageSources(image);
+    lightbox.setImageSources({ alt: '', link: 'http://localhost/plain.jpg' });
 
-      const source = $('#lightbox .lb-source')[0];
-      expect(source.getAttribute('srcset')).toBe(image.link);
-      expect(source.getAttribute('type')).toBe('image/avif');
-      expect($('.lb-image')[0].src).toBe(image.fallback);
-      expect($('.lb-image').attr('alt')).toBe('Full');
-    });
-
-    it('prefers a page-supplied type hint over the file extension', () => {
-      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-typehint-fallback="image/jxl"');
-
-      expect(image.typeHint).toBe('image/jxl');
-
-      lightbox.setImageSources(image);
-
-      expect($('#lightbox .lb-source').attr('type')).toBe('image/jxl');
-    });
-
-    it('uses the type hint for links without a recognizable extension', () => {
-      lightbox.build();
-
-      lightbox.setImageSources({
-        alt: '',
-        link: 'http://localhost/image?id=1',
-        fallback: 'http://localhost/image.jpg',
-        typeHint: 'image/avif'
-      });
-
-      expect($('#lightbox .lb-source').attr('type')).toBe('image/avif');
-    });
-
-    it('omits the type for unrecognized extensions', () => {
-      lightbox.build();
-
-      lightbox.setImageSources({ alt: '', link: 'http://localhost/image.unknown', fallback: 'http://localhost/image.jpg' });
-
-      expect($('#lightbox .lb-source').attr('type')).toBeUndefined();
-    });
-
-    it('clears the source when an image has no fallback', () => {
-      const image = startWith('data-lb-href-fallback="full.jpg"');
-      lightbox.setImageSources(image);
-
-      lightbox.setImageSources({ alt: '', link: 'http://localhost/plain.jpg' });
-
-      const source = $('#lightbox .lb-source');
-      expect(source.attr('srcset')).toBeUndefined();
-      expect(source.attr('type')).toBeUndefined();
-      expect($('.lb-image')[0].src).toBe('http://localhost/plain.jpg');
-    });
+    expect(source().hasAttribute('srcset')).toBe(false);
+    expect(source().hasAttribute('type')).toBe(false);
+    expect(image().src).toBe('http://localhost/plain.jpg');
   });
 });
