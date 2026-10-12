@@ -4,7 +4,7 @@
 
 This project is a fork of Lightbox2, a popular and original JavaScript library for creating image overlays. It is a small, dependency-free (besides jQuery) library that works on all modern browsers. The library is written in vanilla JavaScript for browsers. This project aims to improve upon the original Lightbox2 by updating build toolchain (already done), adding tests, refactoring, and finally adding new functionality.
 
-Currently, main functionality is contained in `src/js/lightbox.mjs`. The styling is in `src/css/lightbox.css`. The library is initialized by adding the `data-lightbox` attribute to an anchor tag wrapping an image.
+The entry point is `src/js/lightbox.mjs` (state, DOM, open/close, rendering). Supporting modules in `src/js/`: `actions.mjs` (control and keyboard handlers), `album.mjs` (reading album entries from link attributes), `layout.mjs` (image fitting math), and `picture.mjs` (`<picture>` sources and preloading). The styling is in `src/css/lightbox.css`. The library is initialized by adding the `data-lightbox` attribute to an anchor tag wrapping an image.
 
 ## Building and Running
 
