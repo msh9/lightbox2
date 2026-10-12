@@ -10,19 +10,27 @@
   <section>
     <h3>Two Individual Images</h3>
     <div>
-      <a class="example-image-link" href="ImgA.avif" data-lightbox="example-1" data-title="Example title" data-caption="A caption describing the image, as Hugo would extract it from IPTC metadata." data-copyright="© Example Photographer" data-alt="Full-size example image A"><img class="example-image" src="ImgA-400h.avif" alt="image-1" style="max-width: 400px; max-height: 400px;" /></a>
-      <a class="example-image-link" href="ImgB.webp" data-lightbox="example-2" data-title="Optional caption."><img class="example-image" src="ImgB-400h.webp" alt="image-1" style="max-width: 400px; max-height: 400px;"/></a>
+      <a class="example-image-link" href="ImgA.avif" data-lightbox="example-1" data-lb-title="Example title" data-lb-caption="A caption describing the image, as Hugo would extract it from IPTC metadata." data-lb-copyright="© Example Photographer" data-lb-alt="Full-size example image A"><img class="example-image" src="ImgA-400h.avif" alt="image-1" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="ImgB.webp" data-lightbox="example-2" data-lb-title="Optional caption."><img class="example-image" src="ImgB-400h.webp" alt="image-1" style="max-width: 400px; max-height: 400px;"/></a>
     </div>
 
     <hr />
 
     <h3>A Four Image Set</h3>
     <div>
-      <a class="example-image-link" href="/test-examples/ImgC.jpg" data-lightbox="example-set" data-title="Click the right half of the image to move forward."><img class="example-image" src="/test-examples/ImgC-400h.jpg" alt="" style="max-width: 400px; max-height: 400px;"/></a>
-      <a class="example-image-link" href="/test-examples/ImgD.avif" data-lightbox="example-set" data-title="Or press the right arrow on your keyboard."><img class="example-image" src="/test-examples/ImgD.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
-      <a class="example-image-link" href="/test-examples/ImgE.avif" data-lightbox="example-set" data-title="The next image in the set is preloaded as you're viewing."><img class="example-image" src="/test-examples/ImgE.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
-      <a class="example-image-link" href="/test-examples/ImgF.avif" data-lightbox="example-set" data-title="Click anywhere outside the image or the X to the right to close."><img class="example-image" src="/test-examples/ImgF.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
-      <a class="example-image-link" href="/test-examples/ImgG.avif" data-lightbox="example-set" data-title="Click anywhere outside the image or the X to the right to close."><img class="example-image" src="/test-examples/ImgG.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="/test-examples/ImgC.jpg" data-lightbox="example-set" data-lb-title="Click the right half of the image to move forward."><img class="example-image" src="/test-examples/ImgC-400h.jpg" alt="" style="max-width: 400px; max-height: 400px;"/></a>
+      <a class="example-image-link" href="/test-examples/ImgD.avif" data-lightbox="example-set" data-lb-title="Or press the right arrow on your keyboard."><img class="example-image" src="/test-examples/ImgD.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="/test-examples/ImgE.avif" data-lightbox="example-set" data-lb-title="The next image in the set is preloaded as you're viewing."><img class="example-image" src="/test-examples/ImgE.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="/test-examples/ImgF.avif" data-lightbox="example-set" data-lb-title="Click anywhere outside the image or the X to the right to close."><img class="example-image" src="/test-examples/ImgF.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="/test-examples/ImgG.avif" data-lightbox="example-set" data-lb-title="Click anywhere outside the image or the X to the right to close."><img class="example-image" src="/test-examples/ImgG.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+    </div>
+
+    <hr />
+
+    <h3>Picture With Fallback</h3>
+    <!-- The fallback is deliberately a different image so it is obvious when a browser without AVIF support uses it. -->
+    <div>
+      <a class="example-image-link" href="/test-examples/ImgD.avif" data-lb-href-fallback="/test-examples/ImgC.jpg" data-lightbox="example-picture" data-lb-title="AVIF with a JPG fallback." data-lb-caption="Browsers without AVIF support show a different (JPG) image here."><img class="example-image" src="/test-examples/ImgD.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
     </div>
   </section>
 

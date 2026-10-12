@@ -52,7 +52,7 @@ describe('Lightbox', () => {
     beforeEach(() => {
       document.body.innerHTML
         = `<div> \ 
-          <a href="image.jpg" data-lightbox="test-single" data-title="${title}"> \ 
+          <a href="image.jpg" data-lightbox="test-single" data-lb-title="${title}"> \ 
             <img alt="${altCaption}" src="foo.jpg" /> \ 
           </a> \ 
         </div>`;
@@ -139,10 +139,10 @@ describe('Lightbox', () => {
     beforeEach(() => {
       document.body.innerHTML
         = `<div> \
-          <a href="${firstFile}" data-lightbox="multi-image" data-title="ImgA"> \ 
+          <a href="${firstFile}" data-lightbox="multi-image" data-lb-title="ImgA"> \ 
             <img alt="ImgA" src="${firstFile}" /> \ 
           </a> \ 
-          <a href="${secondFile}" data-lightbox="multi-image" data-title="ImgD"> \ 
+          <a href="${secondFile}" data-lightbox="multi-image" data-lb-title="ImgD"> \ 
             <img alt="ImgD" src="${secondFile}" /> \ 
           </a> \ 
         </div>`;
@@ -197,7 +197,7 @@ describe('Lightbox', () => {
     });
 
     it('reads title, caption, copyright and alt from data attributes', () => {
-      startWith('data-title="T" data-caption="C" data-copyright="© Me" data-alt="A"');
+      startWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me" data-lb-alt="A"');
 
       expect(lightbox.album[0]).toMatchObject({
         title: 'T',
@@ -207,20 +207,20 @@ describe('Lightbox', () => {
       });
     });
 
-    it('falls back to the thumbnail alt when data-alt is absent', () => {
+    it('falls back to the thumbnail alt when data-lb-alt is absent', () => {
       startWith('', 'From thumbnail');
 
       expect(lightbox.album[0].alt).toBe('From thumbnail');
     });
 
-    it('honors an explicitly empty data-alt', () => {
-      startWith('data-alt=""', 'From thumbnail');
+    it('honors an explicitly empty data-lb-alt', () => {
+      startWith('data-lb-alt=""', 'From thumbnail');
 
       expect(lightbox.album[0].alt).toBe('');
     });
 
     it('renders every field and wires up aria references', () => {
-      startWith('data-title="T" data-caption="C" data-copyright="© Me"');
+      startWith('data-lb-title="T" data-lb-caption="C" data-lb-copyright="© Me"');
 
       lightbox.updateDetails();
 
@@ -232,7 +232,7 @@ describe('Lightbox', () => {
     });
 
     it('hides missing fields and drops their aria references', () => {
-      startWith('data-caption="Only a caption"');
+      startWith('data-lb-caption="Only a caption"');
 
       lightbox.updateDetails();
 
@@ -244,12 +244,74 @@ describe('Lightbox', () => {
     });
 
     it('renders markup in metadata as plain text', () => {
-      startWith('data-title="&lt;b&gt;bold&lt;/b&gt;"');
+      startWith('data-lb-title="&lt;b&gt;bold&lt;/b&gt;"');
 
       lightbox.updateDetails();
 
       expect($('.lb-title').text()).toBe('<b>bold</b>');
       expect($('.lb-title').find('b')).toHaveLength(0);
+    });
+  });
+
+  describe('picture sources', () => {
+    function startWith(attributes) {
+      document.body.innerHTML
+        = `<a href="full.avif" data-lightbox="pictures" ${attributes}><img alt="Thumb" src="thumb.jpg" /></a>`;
+      lightbox.build();
+      jest.spyOn(lightbox, 'changeImage').mockImplementation(() => {});
+      lightbox.start($('a[data-lightbox]'));
+      return lightbox.album[0];
+    }
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      lightbox.album = [];
+      document.body.innerHTML = '';
+    });
+
+    it('resolves the fallback href and reads dimensions', () => {
+      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-width="1200" data-lb-height="800"');
+
+      expect(image.fallback).toBe(new URL('full.jpg', document.baseURI).href);
+      expect(image.width).toBe(1200);
+      expect(image.height).toBe(800);
+    });
+
+    it('ignores incomplete or invalid dimensions', () => {
+      expect(startWith('data-lb-width="1200"')).toMatchObject({ width: undefined, height: undefined });
+      expect(startWith('data-lb-width="wide" data-lb-height="800"')).toMatchObject({ width: undefined, height: undefined });
+    });
+
+    it('offers the link as a typed source with the fallback on the img', () => {
+      const image = startWith('data-lb-href-fallback="full.jpg" data-lb-alt="Full"');
+
+      lightbox.setImageSources(image);
+
+      const source = $('#lightbox .lb-source')[0];
+      expect(source.getAttribute('srcset')).toBe(image.link);
+      expect(source.getAttribute('type')).toBe('image/avif');
+      expect($('.lb-image')[0].src).toBe(image.fallback);
+      expect($('.lb-image').attr('alt')).toBe('Full');
+    });
+
+    it('omits the type for unrecognized extensions', () => {
+      lightbox.build();
+
+      lightbox.setImageSources({ alt: '', link: 'http://localhost/image.unknown', fallback: 'http://localhost/image.jpg' });
+
+      expect($('#lightbox .lb-source').attr('type')).toBeUndefined();
+    });
+
+    it('clears the source when an image has no fallback', () => {
+      const image = startWith('data-lb-href-fallback="full.jpg"');
+      lightbox.setImageSources(image);
+
+      lightbox.setImageSources({ alt: '', link: 'http://localhost/plain.jpg' });
+
+      const source = $('#lightbox .lb-source');
+      expect(source.attr('srcset')).toBeUndefined();
+      expect(source.attr('type')).toBeUndefined();
+      expect($('.lb-image')[0].src).toBe('http://localhost/plain.jpg');
     });
   });
 });
