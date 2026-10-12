@@ -25,11 +25,8 @@ export function fitImage(natural, max, isSvg, options) {
     size inside the viewport.
     */
   if (isSvg) {
-    const aspectRatio = natural.width / natural.height;
-    if (aspectRatio >= 1) {
-      return { width: maxWidth, height: parseInt(maxWidth / aspectRatio, 10) };
-    }
-    return { width: parseInt(maxHeight / aspectRatio, 10), height: maxHeight };
+    const scale = Math.min(maxWidth / natural.width, maxHeight / natural.height);
+    return { width: parseInt(natural.width * scale, 10), height: parseInt(natural.height * scale, 10) };
   }
 
   // Fit image inside the viewport.

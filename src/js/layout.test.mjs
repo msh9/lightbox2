@@ -41,5 +41,12 @@ describe('fitImage', () => {
   it('scales SVGs up to fill the available space', () => {
     expect(fitImage({ width: 100, height: 50 }, { width: 800, height: 600 }, true, fit))
       .toEqual({ width: 800, height: 400 });
+    expect(fitImage({ width: 50, height: 100 }, { width: 800, height: 600 }, true, fit))
+      .toEqual({ width: 300, height: 600 });
+  });
+
+  it('keeps SVGs within both dimensions', () => {
+    expect(fitImage({ width: 300, height: 100 }, { width: 800, height: 200 }, true, fit))
+      .toEqual({ width: 600, height: 200 });
   });
 });
