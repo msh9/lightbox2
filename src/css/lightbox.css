@@ -151,12 +151,20 @@ body.lb-disable-scrolling {
   line-height: 1.1em;
 }
 
-#copyright-title-spacer,
-.lb-data .lb-copyright,
-.lb-data .lb-title {
+.lb-data .lb-title,
+.lb-data .lb-caption,
+.lb-data .lb-copyright {
+  display: block;
   font-size: 1rem;
+  line-height: 1.2em;
+}
+
+.lb-data .lb-title {
   font-weight: bold;
-  line-height: 1em;
+}
+
+.lb-data .lb-copyright {
+  font-size: 0.8rem;
 }
 
 .lb-data .lb-number {
