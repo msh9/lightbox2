@@ -4,8 +4,7 @@
  * Modifications: © 2025-2026 Michael Hughes
  *
  */
-import $ from 'jquery';
-import { attachControls, handleKeyboard } from './actions.mjs';
+import { attachControls } from './actions.mjs';
 import { buildAlbum } from './album.mjs';
 import { fitImage, maxImageSize } from './layout.mjs';
 import { loadPicture, setPictureSources } from './picture.mjs';
@@ -58,263 +57,270 @@ function afterTransition(element) {
   });
 }
 
-function Lightbox(options) {
-  this.album = [];
-  this.currentImageIndex = void 0;
-  // Incremented on every image change and on close, so that stale loads know to stop.
-  this.changeId = 0;
-  this.init();
-
-  // options
-  this.options = $.extend({}, this.constructor.defaults);
-  this.option(options);
+// Read an element's top/right/bottom/left values for a box property such as padding.
+function boxSides(element, property, suffix = '') {
+  const style = getComputedStyle(element);
+  const side = (name) => parseFloat(style.getPropertyValue(property + '-' + name + suffix)) || 0;
+  return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
 }
 
-// Fade and resize timings are CSS custom properties; see lightbox.css.
-Lightbox.defaults = {
-  albumLabel: 'Image %1 of %2',
-  showImageNumberLabel: true,
-  wrapAround: false
-};
-
-Lightbox.prototype.option = function(options) {
-  $.extend(this.options, options);
-};
-
-Lightbox.prototype.imageCountLabel = function(currentImageNum, totalImages) {
-  return this.options.albumLabel.replace(/%1/g, currentImageNum).replace(/%2/g, totalImages);
-};
-
-Lightbox.prototype.init = function() {
-  var self = this;
-  // Both enable and build methods require the body tag to be in the DOM.
-  $(function() {
-    self.enable();
-    self.build();
-  });
-};
-
-// Loop through anchors and areamaps looking for either data-lightbox attributes or rel attributes
-// that contain 'lightbox'. When these are clicked, start lightbox.
-Lightbox.prototype.enable = function() {
-  var self = this;
-  $('body').on('click', 'a[data-lightbox], area[data-lightbox]', function(event) {
-    self.start($(event.currentTarget));
-    return false;
-  });
-};
-
-// Build the lightbox <dialog> and attach its event handlers. Opened as a modal, the dialog
-// provides the backdrop, keeps focus and clicks inside it, and closes on Escape.
-Lightbox.prototype.build = function() {
-  if ($('#lightbox').length > 0) {
-    return;
-  }
-
-  $(TEMPLATE).appendTo($('body'));
-
-  // Cache jQuery objects
-  this.$lightbox       = $('#lightbox');
-  this.$outerContainer = this.$lightbox.find('.lb-outer-container');
-  this.$container      = this.$lightbox.find('.lb-container');
-  this.$image          = this.$lightbox.find('.lb-image');
-  this.$source         = this.$lightbox.find('.lb-source');
-  this.$nav            = this.$lightbox.find('.lb-nav');
-  this.dialog          = this.$lightbox[0];
-
-  // Store css values for future lookup
-  this.containerPadding = {
-    top: parseInt(this.$container.css('padding-top'), 10) || 0,
-    right: parseInt(this.$container.css('padding-right'), 10) || 0,
-    bottom: parseInt(this.$container.css('padding-bottom'), 10) || 0,
-    left: parseInt(this.$container.css('padding-left'), 10) || 0
+class Lightbox {
+  // Fade and resize timings are CSS custom properties; see lightbox.css.
+  static defaults = {
+    albumLabel: 'Image %1 of %2',
+    showImageNumberLabel: true,
+    wrapAround: false
   };
 
-  this.imageBorderWidth = {
-    top: parseInt(this.$image.css('border-top-width'), 10) || 0,
-    right: parseInt(this.$image.css('border-right-width'), 10) || 0,
-    bottom: parseInt(this.$image.css('border-bottom-width'), 10) || 0,
-    left: parseInt(this.$image.css('border-left-width'), 10) || 0
-  };
-
-  // Every way of closing, including Escape handled by the browser, ends with a close event.
-  this.dialog.addEventListener('close', this.cleanUp.bind(this));
-
-  attachControls(this);
-};
-
-// Open the lightbox at the clicked link, with the rest of its album available for navigation.
-Lightbox.prototype.start = function($link) {
-  const { album, index: imageNumber } = buildAlbum($link);
-  this.album = album;
-
-  if (!this.dialog.open) {
-    this.dialog.showModal();
-    // Focus the dialog itself so the keyboard works before any of its controls are shown.
-    this.dialog.focus();
+  constructor(options) {
+    this.album = [];
+    this.currentImageIndex = undefined;
+    // Incremented on every image change and on close, so that stale loads know to stop.
+    this.changeId = 0;
+    this.keyboardEnabled = false;
+    this.initialized = false;
+    this.options = { ...Lightbox.defaults, ...options };
   }
 
-  this.changeImage(imageNumber);
-};
+  option(options) {
+    Object.assign(this.options, options);
+  }
 
-// Hide the current image, load the requested one, resize to fit it, and then show it.
-Lightbox.prototype.changeImage = function(imageNumber) {
-  const self = this;
-  const image = this.album[imageNumber];
-  const isSvg = image.link.split('.').slice(-1)[0] === 'svg';
-  const img = this.$image[0];
-  const changeId = ++this.changeId;
+  imageCountLabel(currentImageNum, totalImages) {
+    return this.options.albumLabel.replace(/%1/g, currentImageNum).replace(/%2/g, totalImages);
+  }
 
-  this.currentImageIndex = imageNumber;
-
-  // Disable keyboard nav during transitions
-  this.disableKeyboardNav();
-  this.dialog.dataset.state = 'loading';
-
-  this.setImageSources(image);
-
-  // With dimensions in the markup the resize can start while the image is still loading.
-  const resized = image.width && image.height ? this.sizeContainer(image.width, image.height, isSvg) : null;
-
-  // decode() rejects for broken images too; carry on regardless so the spinner never hangs.
-  img.decode().catch(function() {}).then(function() {
-    if (changeId !== self.changeId) {
-      return null;
+  // Set up the lightbox: add its markup to the page and start listening for clicks on lightbox
+  // links. Call once; it waits for the document to finish parsing if needed.
+  init(options) {
+    if (options) {
+      this.option(options);
     }
-    return resized || self.sizeContainer(img.naturalWidth, img.naturalHeight, isSvg);
-  }).then(function() {
-    if (changeId === self.changeId) {
-      self.showImage();
+    if (this.initialized) {
+      return this;
     }
-  });
-};
+    this.initialized = true;
 
-// Show an album entry in the lightbox's <picture>.
-Lightbox.prototype.setImageSources = function(image) {
-  this.$image.attr('alt', image.alt);
-  setPictureSources(this.$source[0], this.$image[0], image);
-};
-
-// Size the image to fit the viewport and resize the container around it. The container's size
-// change is animated in CSS; the returned promise resolves once it has finished.
-Lightbox.prototype.sizeContainer = function(naturalWidth, naturalHeight, isSvg) {
-  const outerContainer = this.$outerContainer[0];
-  const img = this.$image[0];
-  const max = maxImageSize(
-    { width: window.innerWidth, height: window.innerHeight },
-    this.containerPadding,
-    this.imageBorderWidth,
-    VIEWPORT_MARGIN_TOP
-  );
-  const size = fitImage({ width: naturalWidth, height: naturalHeight }, max, isSvg);
-
-  img.style.width = size.width + 'px';
-  img.style.height = size.height + 'px';
-
-  const newWidth = size.width + this.containerPadding.left + this.containerPadding.right + this.imageBorderWidth.left + this.imageBorderWidth.right;
-  const newHeight = size.height + this.containerPadding.top + this.containerPadding.bottom + this.imageBorderWidth.top + this.imageBorderWidth.bottom;
-
-  this.$lightbox.find('.lb-data-container')[0].style.width = newWidth + 'px';
-
-  if (outerContainer.offsetWidth === newWidth && outerContainer.offsetHeight === newHeight) {
-    return Promise.resolve();
-  }
-  outerContainer.style.width = newWidth + 'px';
-  outerContainer.style.height = newHeight + 'px';
-  return afterTransition(outerContainer);
-};
-
-// Display the image and its details and begin preload neighboring images.
-Lightbox.prototype.showImage = function() {
-  this.updateNav();
-  this.updateDetails();
-  this.dialog.dataset.state = 'ready';
-
-  // Keep focus inside the dialog, e.g. when it was on the cancel button that just disappeared.
-  if (!this.dialog.contains(document.activeElement)) {
-    this.dialog.focus();
+    const setUp = () => {
+      this.enable();
+      this.build();
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setUp, { once: true });
+    } else {
+      setUp();
+    }
+    return this;
   }
 
-  this.preloadNeighboringImages();
-  this.enableKeyboardNav();
-};
-
-// Display previous and next navigation if appropriate.
-Lightbox.prototype.updateNav = function() {
-  const hasAlbum = this.album.length > 1;
-  const wrap = this.options.wrapAround;
-
-  this.$lightbox.find('.lb-prev')[0].hidden = !(hasAlbum && (wrap || this.currentImageIndex > 0));
-  this.$lightbox.find('.lb-next')[0].hidden = !(hasAlbum && (wrap || this.currentImageIndex < this.album.length - 1));
-};
-
-// Display title, caption, copyright, image number, and closing button.
-// All text is rendered as plain text and every field is optional.
-Lightbox.prototype.updateDetails = function() {
-  var self = this;
-  const currentImage = this.album[this.currentImageIndex];
-
-  function renderText(className, value) {
-    const node = self.$lightbox.find('.' + className)[0];
-    node.textContent = value || '';
-    node.hidden = !value;
-    return Boolean(value);
+  // Open the lightbox when a link with a data-lightbox attribute, or anything inside one, is clicked.
+  enable() {
+    document.body.addEventListener('click', (event) => {
+      const link = event.target.closest('a[data-lightbox]');
+      if (!link) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.start(link);
+    });
   }
 
-  const hasTitle = renderText('lb-title', currentImage.title);
-  const describedBy = ['caption', 'copyright']
-    .filter((field) => renderText('lb-' + field, currentImage[field]))
-    .map((field) => 'lb-' + field);
+  // Build the lightbox <dialog> and attach its event handlers. Opened as a modal, the dialog
+  // provides the backdrop, keeps focus and clicks inside it, and closes on Escape.
+  build() {
+    if (document.getElementById('lightbox')) {
+      return;
+    }
 
-  // Name the dialog after the image title, falling back to the generic aria-label.
-  if (hasTitle) {
-    this.$lightbox.attr('aria-labelledby', 'lb-title');
-  } else {
-    this.$lightbox.removeAttr('aria-labelledby');
+    document.body.insertAdjacentHTML('beforeend', TEMPLATE);
+
+    this.dialog         = document.getElementById('lightbox');
+    this.outerContainer = this.dialog.querySelector('.lb-outer-container');
+    this.container      = this.dialog.querySelector('.lb-container');
+    this.image          = this.dialog.querySelector('.lb-image');
+    this.source         = this.dialog.querySelector('.lb-source');
+    this.nav            = this.dialog.querySelector('.lb-nav');
+    this.dataContainer  = this.dialog.querySelector('.lb-data-container');
+
+    // Store css values for future lookup
+    this.containerPadding = boxSides(this.container, 'padding');
+    this.imageBorderWidth = boxSides(this.image, 'border', '-width');
+
+    // Every way of closing, including Escape handled by the browser, ends with a close event.
+    this.dialog.addEventListener('close', () => this.cleanUp());
+
+    attachControls(this);
   }
-  if (describedBy.length) {
-    this.$image.attr('aria-describedby', describedBy.join(' '));
-  } else {
-    this.$image.removeAttr('aria-describedby');
+
+  // Open the lightbox at the clicked link, with the rest of its album available for navigation.
+  start(link) {
+    const { album, index } = buildAlbum(link);
+    this.album = album;
+
+    if (!this.dialog.open) {
+      this.dialog.showModal();
+      // Focus the dialog itself so the keyboard works before any of its controls are shown.
+      this.dialog.focus();
+    }
+
+    this.changeImage(index);
   }
 
-  const showNumber = this.album.length > 1 && this.options.showImageNumberLabel;
-  renderText('lb-number', showNumber ? this.imageCountLabel(this.currentImageIndex + 1, this.album.length) : '');
-};
+  // Hide the current image, load the requested one, resize to fit it, and then show it.
+  changeImage(imageNumber) {
+    const image = this.album[imageNumber];
+    const isSvg = image.link.split('.').slice(-1)[0] === 'svg';
+    const img = this.image;
+    const changeId = ++this.changeId;
 
-// Preload previous and next images in set.
-Lightbox.prototype.preloadNeighboringImages = function() {
-  if (this.album.length > this.currentImageIndex + 1) {
-    loadPicture(this.album[this.currentImageIndex + 1]);
+    this.currentImageIndex = imageNumber;
+
+    // Disable keyboard nav during transitions
+    this.disableKeyboardNav();
+    this.dialog.dataset.state = 'loading';
+
+    this.setImageSources(image);
+
+    // With dimensions in the markup the resize can start while the image is still loading.
+    const resized = image.width && image.height ? this.sizeContainer(image.width, image.height, isSvg) : null;
+
+    // decode() rejects for broken images too; carry on regardless so the spinner never hangs.
+    img.decode().catch(() => {}).then(() => {
+      if (changeId !== this.changeId) {
+        return null;
+      }
+      return resized || this.sizeContainer(img.naturalWidth, img.naturalHeight, isSvg);
+    }).then(() => {
+      if (changeId === this.changeId) {
+        this.showImage();
+      }
+    });
   }
-  if (this.currentImageIndex > 0) {
-    loadPicture(this.album[this.currentImageIndex - 1]);
+
+  // Show an album entry in the lightbox's <picture>.
+  setImageSources(image) {
+    this.image.alt = image.alt;
+    setPictureSources(this.source, this.image, image);
   }
-};
 
-Lightbox.prototype.enableKeyboardNav = function() {
-  this.$lightbox.on('keyup.keyboard', $.proxy(this.keyboardAction, this));
-};
+  // Size the image to fit the viewport and resize the container around it. The container's size
+  // change is animated in CSS; the returned promise resolves once it has finished.
+  sizeContainer(naturalWidth, naturalHeight, isSvg) {
+    const padding = this.containerPadding;
+    const border = this.imageBorderWidth;
+    const max = maxImageSize(
+      { width: window.innerWidth, height: window.innerHeight },
+      padding,
+      border,
+      VIEWPORT_MARGIN_TOP
+    );
+    const size = fitImage({ width: naturalWidth, height: naturalHeight }, max, isSvg);
 
-Lightbox.prototype.disableKeyboardNav = function() {
-  this.$lightbox.off('.keyboard');
-};
+    this.image.style.width = size.width + 'px';
+    this.image.style.height = size.height + 'px';
 
-Lightbox.prototype.keyboardAction = function(event) {
-  handleKeyboard(this, event);
-};
+    const newWidth = size.width + padding.left + padding.right + border.left + border.right;
+    const newHeight = size.height + padding.top + padding.bottom + border.top + border.bottom;
 
-// Closing time. :-(
-Lightbox.prototype.end = function() {
-  if (this.dialog.open) {
-    this.dialog.close();
+    this.dataContainer.style.width = newWidth + 'px';
+
+    const outerContainer = this.outerContainer;
+    if (outerContainer.offsetWidth === newWidth && outerContainer.offsetHeight === newHeight) {
+      return Promise.resolve();
+    }
+    outerContainer.style.width = newWidth + 'px';
+    outerContainer.style.height = newHeight + 'px';
+    return afterTransition(outerContainer);
   }
-};
 
-// Runs however the dialog was closed. Abandons any image that is still loading.
-Lightbox.prototype.cleanUp = function() {
-  this.changeId++;
-  this.disableKeyboardNav();
-};
+  // Display the image and its details and begin preload neighboring images.
+  showImage() {
+    this.updateNav();
+    this.updateDetails();
+    this.dialog.dataset.state = 'ready';
+
+    // Keep focus inside the dialog, e.g. when it was on the cancel button that just disappeared.
+    if (!this.dialog.contains(document.activeElement)) {
+      this.dialog.focus();
+    }
+
+    this.preloadNeighboringImages();
+    this.enableKeyboardNav();
+  }
+
+  // Display previous and next navigation if appropriate.
+  updateNav() {
+    const hasAlbum = this.album.length > 1;
+    const wrap = this.options.wrapAround;
+
+    this.dialog.querySelector('.lb-prev').hidden = !(hasAlbum && (wrap || this.currentImageIndex > 0));
+    this.dialog.querySelector('.lb-next').hidden = !(hasAlbum && (wrap || this.currentImageIndex < this.album.length - 1));
+  }
+
+  // Display title, caption, copyright, image number, and closing button.
+  // All text is rendered as plain text and every field is optional.
+  updateDetails() {
+    const currentImage = this.album[this.currentImageIndex];
+
+    const renderText = (className, value) => {
+      const node = this.dialog.querySelector('.' + className);
+      node.textContent = value || '';
+      node.hidden = !value;
+      return Boolean(value);
+    };
+
+    const hasTitle = renderText('lb-title', currentImage.title);
+    const describedBy = ['caption', 'copyright']
+      .filter((field) => renderText('lb-' + field, currentImage[field]))
+      .map((field) => 'lb-' + field);
+
+    // Name the dialog after the image title, falling back to the generic aria-label.
+    if (hasTitle) {
+      this.dialog.setAttribute('aria-labelledby', 'lb-title');
+    } else {
+      this.dialog.removeAttribute('aria-labelledby');
+    }
+    if (describedBy.length) {
+      this.image.setAttribute('aria-describedby', describedBy.join(' '));
+    } else {
+      this.image.removeAttribute('aria-describedby');
+    }
+
+    const showNumber = this.album.length > 1 && this.options.showImageNumberLabel;
+    renderText('lb-number', showNumber ? this.imageCountLabel(this.currentImageIndex + 1, this.album.length) : '');
+  }
+
+  // Preload previous and next images in set.
+  preloadNeighboringImages() {
+    if (this.album.length > this.currentImageIndex + 1) {
+      loadPicture(this.album[this.currentImageIndex + 1]);
+    }
+    if (this.currentImageIndex > 0) {
+      loadPicture(this.album[this.currentImageIndex - 1]);
+    }
+  }
+
+  enableKeyboardNav() {
+    this.keyboardEnabled = true;
+  }
+
+  disableKeyboardNav() {
+    this.keyboardEnabled = false;
+  }
+
+  // Closing time. :-(
+  end() {
+    if (this.dialog?.open) {
+      this.dialog.close();
+    }
+  }
+
+  // Runs however the dialog was closed. Abandons any image that is still loading.
+  cleanUp() {
+    this.changeId++;
+    this.disableKeyboardNav();
+  }
+}
 
 export default new Lightbox();

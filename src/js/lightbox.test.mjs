@@ -50,9 +50,8 @@ function click(element) {
   return event;
 }
 
-function keyup(element, key, keyCode) {
-  // Browsers derive the legacy which from keyCode; jsdom needs both spelled out.
-  const event = new KeyboardEvent('keyup', { key, keyCode, which: keyCode, bubbles: true, cancelable: true });
+function keyup(element, key) {
+  const event = new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true });
   element.dispatchEvent(event);
   return event;
 }
@@ -61,12 +60,8 @@ function isHidden(element) {
   return getComputedStyle(element).display === 'none';
 }
 
-beforeAll(async () => {
-  // Importing the module initializes it (enable, then build) once the DOM is ready, a few ticks
-  // later. The lightbox markup appearing means both steps have run.
-  for (let tries = 0; !$q('#lightbox') && tries < 100; tries++) {
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
+beforeAll(() => {
+  lightbox.init();
 
   fixture = document.createElement('div');
   document.body.append(fixture);
@@ -96,6 +91,7 @@ describe('setup', () => {
   });
 
   it('adds the lightbox dialog to the page exactly once', () => {
+    lightbox.init();
     lightbox.build();
 
     expect(document.querySelectorAll('#lightbox')).toHaveLength(1);
@@ -149,6 +145,14 @@ describe('opening', () => {
     expect(changeImageSpy).not.toHaveBeenCalled();
   });
 
+  it('ignores image map areas', () => {
+    render('<map name="m"><area href="image.jpg" data-lightbox="map" alt="Area"></map>');
+
+    click(fixture.querySelector('area'));
+
+    expect(changeImageSpy).not.toHaveBeenCalled();
+  });
+
   it('works for links without an image child', () => {
     render('<a href="full/image-only.jpg" data-lightbox="solo">Open</a>');
 
@@ -184,6 +188,18 @@ describe('albums', () => {
 
     expect(lightbox.album[0].link).toBe(links()[0].href);
     expect(lightbox.album[0].link).not.toBe(links()[0].querySelector('img').src);
+  });
+
+  it('handles album names containing quotes and backslashes', () => {
+    render(`
+      <a href="full/x.jpg" data-lightbox='say "hi" \\o/'>X</a>
+      <a href="full/y.jpg" data-lightbox='say "hi" \\o/'>Y</a>
+    `);
+
+    click(links()[1]);
+
+    expect(lightbox.album).toHaveLength(2);
+    expect(changeImageSpy).toHaveBeenCalledWith(1);
   });
 
   it('opens at the clicked link\'s position in its album', () => {
@@ -261,10 +277,10 @@ describe('keyboard', () => {
   });
 
   it('moves with the arrow keys', () => {
-    keyup($q('#lightbox'), 'ArrowLeft', 37);
+    keyup($q('#lightbox'), 'ArrowLeft');
     expect(changeImageSpy).toHaveBeenLastCalledWith(0);
 
-    keyup($q('#lightbox'), 'ArrowRight', 39);
+    keyup($q('#lightbox'), 'ArrowRight');
     expect(changeImageSpy).toHaveBeenLastCalledWith(1);
   });
 
@@ -272,17 +288,32 @@ describe('keyboard', () => {
     const documentListener = jest.fn();
     document.addEventListener('keyup', documentListener);
 
-    keyup($q('#lightbox'), 'Escape', 27);
+    keyup($q('#lightbox'), 'Escape');
 
     expect(endSpy).toHaveBeenCalled();
     expect(documentListener).not.toHaveBeenCalled();
     document.removeEventListener('keyup', documentListener);
   });
 
+  it('keeps the browser\'s Escape keydown and its trailing keyup from reaching the page', () => {
+    const documentListener = jest.fn();
+    document.addEventListener('keydown', documentListener);
+    document.addEventListener('keyup', documentListener);
+
+    $q('#lightbox').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    // By the time the key comes up the dialog has closed and focus is back on the page.
+    keyup(document.body, 'Escape');
+    keyup(document.body, 'Escape');
+
+    expect(documentListener).toHaveBeenCalledTimes(1);
+    document.removeEventListener('keydown', documentListener);
+    document.removeEventListener('keyup', documentListener);
+  });
+
   it('ignores keys while navigation is disabled', () => {
     lightbox.disableKeyboardNav();
 
-    keyup($q('#lightbox'), 'ArrowRight', 39);
+    keyup($q('#lightbox'), 'ArrowRight');
 
     expect(changeImageSpy).not.toHaveBeenCalled();
   });
@@ -299,14 +330,14 @@ describe('closing', () => {
     lightbox.end();
 
     expect($q('#lightbox').open).toBe(false);
-    keyup($q('#lightbox'), 'ArrowRight', 39);
+    keyup($q('#lightbox'), 'ArrowRight');
     expect(changeImageSpy).toHaveBeenCalledTimes(1);
   });
 
   it('cleans up when the browser closes the dialog itself, e.g. on Escape', () => {
     $q('#lightbox').close();
 
-    keyup($q('#lightbox'), 'ArrowRight', 39);
+    keyup($q('#lightbox'), 'ArrowRight');
     expect(changeImageSpy).toHaveBeenCalledTimes(1);
   });
 });
@@ -384,6 +415,10 @@ describe('metadata attributes', () => {
       copyright: '© Me',
       alt: 'A'
     });
+  });
+
+  it('does not use the link title attribute as the title', () => {
+    expect(openWith('title="Tooltip"').title).toBeUndefined();
   });
 
   it('falls back to the thumbnail alt when data-lb-alt is absent', () => {

@@ -38,13 +38,13 @@ describe('handleKeyboard', () => {
     };
   }
 
-  function key(keyCode) {
-    return { keyCode, stopPropagation: jest.fn() };
+  function key(name) {
+    return { key: name, stopPropagation: jest.fn() };
   }
 
   it('closes on Esc without letting the event bubble', () => {
     const lightbox = fakeLightbox();
-    const event = key(27);
+    const event = key('Escape');
 
     handleKeyboard(lightbox, event);
 
@@ -55,26 +55,26 @@ describe('handleKeyboard', () => {
   it('moves with the arrow keys', () => {
     const lightbox = fakeLightbox({ index: 1 });
 
-    handleKeyboard(lightbox, key(37));
-    handleKeyboard(lightbox, key(39));
+    handleKeyboard(lightbox, key('ArrowLeft'));
+    handleKeyboard(lightbox, key('ArrowRight'));
 
     expect(lightbox.changeImage.mock.calls).toEqual([[0], [2]]);
   });
 
   it('stops at the ends unless wrapAround is set', () => {
     const stopping = fakeLightbox({ index: 2 });
-    handleKeyboard(stopping, key(39));
+    handleKeyboard(stopping, key('ArrowRight'));
     expect(stopping.changeImage).not.toHaveBeenCalled();
 
     const wrapping = fakeLightbox({ index: 2, wrapAround: true });
-    handleKeyboard(wrapping, key(39));
+    handleKeyboard(wrapping, key('ArrowRight'));
     expect(wrapping.changeImage).toHaveBeenCalledWith(0);
   });
 
   it('does not wrap a single-image album', () => {
     const lightbox = fakeLightbox({ length: 1, wrapAround: true });
 
-    handleKeyboard(lightbox, key(37));
+    handleKeyboard(lightbox, key('ArrowLeft'));
 
     expect(lightbox.changeImage).not.toHaveBeenCalled();
   });
