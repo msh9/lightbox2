@@ -14,15 +14,27 @@ Wrap a thumbnail in a link to the full-size image. Links that share a `data-ligh
 ```html
 <a href="full.jpg"
    data-lightbox="album-name"
-   data-title="Title"
-   data-caption="Caption"
-   data-copyright="© Photographer"
-   data-alt="Description of the full-size image">
+   data-lb-title="Title"
+   data-lb-caption="Caption"
+   data-lb-copyright="© Photographer"
+   data-lb-alt="Description of the full-size image">
   <img src="thumb.jpg" alt="Thumbnail description">
 </a>
 ```
 
-Every metadata attribute is optional and missing fields are hidden. When `data-alt` is absent, the thumbnail's `alt` is used. The title labels the lightbox dialog, and the caption and copyright describe the image for assistive technology.
+To serve a modern format with a fallback, point `href` at the preferred image and `data-lb-href-fallback` at an alternative with the same dimensions. The lightbox renders a `<picture>` whose `<source>` type is inferred from the `href` file extension, so browsers that cannot decode it load the fallback instead.
+
+```html
+<a href="full.avif" data-lb-href-fallback="full.jpg" data-lb-width="1600" data-lb-height="1067" data-lightbox="album-name">
+  <img src="thumb.jpg" alt="Thumbnail description">
+</a>
+```
+
+If the `href` has no recognizable extension (for example an image served from a query-string URL), or you want to state the type explicitly, add `data-lb-typehint-fallback` with the MIME type of the `href` image, e.g. `data-lb-typehint-fallback="image/avif"`. The hint takes precedence over the extension.
+
+`data-lb-width` and `data-lb-height` are optional. When both are present they are used instead of the loaded image's intrinsic size.
+
+Every metadata attribute is optional and missing fields are hidden. When `data-lb-alt` is absent, the thumbnail's `alt` is used. The title labels the lightbox dialog, and the caption and copyright describe the image for assistive technology.
 
 ## Local development
 

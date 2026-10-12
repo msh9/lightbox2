@@ -23,6 +23,10 @@ body.lb-disable-scrolling {
   outline: none;
 }
 
+.lightbox .lb-picture {
+  display: block;
+}
+
 .lightbox .lb-image {
   display: block;
   height: auto;
