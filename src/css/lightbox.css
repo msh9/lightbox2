@@ -1,26 +1,88 @@
-body.lb-disable-scrolling {
-  overflow: hidden;
-}
-
-.lightbox-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 9999;
-  background-color: black;
-  opacity: 0.8;
-  display: none;
-}
-
+/*
+  Timings and the backdrop color can be overridden on .lightbox.
+  Browsers without @starting-style or transition-behavior support simply skip the fades.
+*/
 .lightbox {
-  position: absolute;
-  left: 0;
+  --lb-fade-duration: 0.6s;
+  --lb-image-fade-duration: 0.6s;
+  --lb-resize-duration: 0.7s;
+  --lb-backdrop-color: rgb(0 0 0 / 80%);
+
+  /* Fill the viewport so a click anywhere around the image lands on the dialog and closes it. */
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
   width: 100%;
-  z-index: 10000;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   text-align: center;
   line-height: 0;
   font-weight: normal;
   outline: none;
+  opacity: 0;
+  transition:
+    opacity var(--lb-fade-duration),
+    overlay var(--lb-fade-duration) allow-discrete,
+    display var(--lb-fade-duration) allow-discrete;
+}
+
+.lightbox[open] {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 1;
+}
+
+.lightbox::backdrop {
+  background-color: transparent;
+  transition:
+    background-color var(--lb-fade-duration, 0.6s),
+    overlay var(--lb-fade-duration, 0.6s) allow-discrete,
+    display var(--lb-fade-duration, 0.6s) allow-discrete;
+}
+
+.lightbox[open]::backdrop {
+  background-color: var(--lb-backdrop-color, rgb(0 0 0 / 80%));
+}
+
+@starting-style {
+  .lightbox[open] {
+    opacity: 0;
+  }
+
+  .lightbox[open]::backdrop {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lightbox {
+    --lb-fade-duration: 0s;
+    --lb-image-fade-duration: 0s;
+    --lb-resize-duration: 0s;
+  }
+}
+
+/* Keep the page from scrolling behind the open lightbox. */
+html:has(.lightbox[open]) {
+  overflow: hidden;
+}
+
+/* Class rules below set display, so make sure the hidden attribute still wins. */
+.lightbox [hidden] {
+  display: none !important;
+}
+
+.lightbox button {
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  cursor: pointer;
 }
 
 .lightbox .lb-picture {
@@ -38,10 +100,6 @@ body.lb-disable-scrolling {
   border: 4px solid white;
 }
 
-.lightbox a img {
-  border: none;
-}
-
 .lb-outer-container {
   position: relative;
   width: 250px;
@@ -52,12 +110,9 @@ body.lb-disable-scrolling {
   /* Background color behind image.
      This is visible during transitions. */
   background-color: white;
-}
-
-.lb-outer-container::after {
-  content: "";
-  display: table;
-  clear: both;
+  transition:
+    width var(--lb-resize-duration) ease-in-out,
+    height var(--lb-resize-duration) ease-in-out;
 }
 
 .lb-loader {
@@ -84,49 +139,41 @@ body.lb-disable-scrolling {
   left: 0;
   height: 100%;
   width: 100%;
-  z-index: 10;
 }
 
-.lb-container > .nav {
-  left: 0;
-}
-
-.lb-nav a {
-  outline: none;
-  background-image: url("data:image/gif;base64,R0lGODlhAQABAPAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==");
-}
-
-.lb-prev,
-.lb-next {
-  height: 100%;
-  cursor: pointer;
+.lb-nav .lb-prev,
+.lb-nav .lb-next {
   display: block;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.6s;
 }
 
-.lb-nav a.lb-prev {
+.lb-nav .lb-prev {
   width: 34%;
-  left: 0;
   float: left;
   background: url("../images/prev.png") left 48% no-repeat;
-  opacity: 0;
-  transition: opacity 0.6s;
 }
 
-.lb-nav a.lb-prev:hover {
-  opacity: 1;
-}
-
-.lb-nav a.lb-next {
+.lb-nav .lb-next {
   width: 64%;
-  right: 0;
   float: right;
   background: url("../images/next.png") right 48% no-repeat;
-  opacity: 0;
-  transition: opacity 0.6s;
 }
 
-.lb-nav a.lb-next:hover {
+.lb-nav .lb-prev:hover,
+.lb-nav .lb-next:hover,
+.lb-nav .lb-prev:focus-visible,
+.lb-nav .lb-next:focus-visible {
   opacity: 1;
+}
+
+/* Without hover there is no way to discover the controls, so always show them. */
+@media (hover: none) {
+  .lb-nav .lb-prev,
+  .lb-nav .lb-next {
+    opacity: 1;
+  }
 }
 
 .lb-data-container {
@@ -185,13 +232,30 @@ body.lb-disable-scrolling {
   width: 30px;
   height: 30px;
   background: url("../images/close.png") top right no-repeat;
-  text-align: right;
-  outline: none;
   opacity: 0.7;
   transition: opacity 0.2s;
 }
 
-.lb-data .lb-close:hover {
-  cursor: pointer;
+.lb-data .lb-close:hover,
+.lb-data .lb-close:focus-visible {
   opacity: 1;
+}
+
+/* Loading and ready states, set on the dialog as data-state. */
+.lightbox .lb-image,
+.lightbox .lb-data-container {
+  transition: opacity var(--lb-image-fade-duration);
+}
+
+/* While an image loads only the spinner shows; everything else appears once it is sized. */
+.lightbox[data-state="loading"] .lb-image,
+.lightbox[data-state="loading"] .lb-nav,
+.lightbox[data-state="loading"] .lb-data-container {
+  visibility: hidden;
+  opacity: 0;
+  transition: none;
+}
+
+.lightbox:not([data-state="loading"]) .lb-loader {
+  display: none;
 }

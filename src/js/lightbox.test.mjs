@@ -14,6 +14,24 @@ import lightbox from './lightbox.mjs';
 */
 let fixture;
 
+// jsdom has no <dialog> methods and no img.decode(); stand in with the behavior the lightbox uses.
+HTMLDialogElement.prototype.showModal ??= function() {
+  this.open = true;
+};
+HTMLDialogElement.prototype.close ??= function() {
+  if (this.open) {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  }
+};
+HTMLImageElement.prototype.decode ??= function() {
+  return Promise.resolve();
+};
+
+function settle() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function render(html) {
   fixture.innerHTML = html;
 }
@@ -65,6 +83,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
+  lightbox.end();
   fixture.innerHTML = '';
   lightbox.album = [];
   lightbox.currentImageIndex = 0;
@@ -76,16 +95,15 @@ describe('setup', () => {
     expect(lightbox).not.toBeNull();
   });
 
-  it('adds the lightbox and overlay to the page exactly once', () => {
+  it('adds the lightbox dialog to the page exactly once', () => {
     lightbox.build();
 
     expect(document.querySelectorAll('#lightbox')).toHaveLength(1);
-    expect(document.querySelectorAll('#lightboxOverlay')).toHaveLength(1);
+    expect($q('#lightbox').tagName).toBe('DIALOG');
   });
 
-  it('starts hidden', () => {
-    expect(isHidden($q('#lightbox'))).toBe(true);
-    expect(isHidden($q('#lightboxOverlay'))).toBe(true);
+  it('starts closed', () => {
+    expect($q('#lightbox').open).toBe(false);
   });
 });
 
@@ -93,8 +111,12 @@ describe('opening', () => {
   it('opens at the clicked link', () => {
     render('<a href="image.jpg" data-lightbox="single"><img alt="Thumb" src="thumb.jpg" /></a>');
 
+    const showModal = jest.spyOn($q('#lightbox'), 'showModal');
+
     click(links()[0]);
 
+    expect(showModal).toHaveBeenCalled();
+    expect($q('#lightbox').open).toBe(true);
     expect(changeImageSpy).toHaveBeenCalledTimes(1);
     expect(changeImageSpy).toHaveBeenCalledWith(0);
   });
@@ -194,12 +216,6 @@ describe('controls', () => {
     expect(changeImageSpy).toHaveBeenLastCalledWith(1);
   });
 
-  it('closes when the overlay is clicked', () => {
-    click($q('#lightboxOverlay'));
-
-    expect(endSpy).toHaveBeenCalled();
-  });
-
   it('closes when the empty area around the image is clicked', () => {
     click($q('#lightbox'));
 
@@ -212,14 +228,15 @@ describe('controls', () => {
     expect(endSpy).not.toHaveBeenCalled();
   });
 
-  it('closes from the close button by click, Enter, or Space', () => {
-    const close = $q('#lightbox .lb-close');
+  it('closes from the close and cancel buttons', () => {
+    // Real buttons, so browsers also click them on Enter and Space.
+    expect($q('#lightbox .lb-close').tagName).toBe('BUTTON');
+    expect($q('#lightbox .lb-cancel').tagName).toBe('BUTTON');
 
-    click(close);
-    keyup(close, 'Enter', 13);
-    keyup(close, ' ', 32);
+    click($q('#lightbox .lb-close'));
+    click($q('#lightbox .lb-cancel'));
 
-    expect(endSpy).toHaveBeenCalledTimes(3);
+    expect(endSpy).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -268,6 +285,86 @@ describe('keyboard', () => {
     keyup($q('#lightbox'), 'ArrowRight', 39);
 
     expect(changeImageSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('closing', () => {
+  beforeEach(() => {
+    render('<a href="a.jpg" data-lightbox="set">A</a><a href="b.jpg" data-lightbox="set">B</a>');
+    click(links()[0]);
+    lightbox.enableKeyboardNav();
+  });
+
+  it('closes the dialog and stops keyboard navigation', () => {
+    lightbox.end();
+
+    expect($q('#lightbox').open).toBe(false);
+    keyup($q('#lightbox'), 'ArrowRight', 39);
+    expect(changeImageSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up when the browser closes the dialog itself, e.g. on Escape', () => {
+    $q('#lightbox').close();
+
+    keyup($q('#lightbox'), 'ArrowRight', 39);
+    expect(changeImageSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('showing an image', () => {
+  beforeEach(() => {
+    // Let the real changeImage run; the decode() stand-in resolves immediately.
+    changeImageSpy.mockRestore();
+    render(`
+      <a href="a.jpg" data-lightbox="set" data-lb-title="First" data-lb-width="400" data-lb-height="300">A</a>
+      <a href="b.jpg" data-lightbox="set" data-lb-title="Second" data-lb-width="300" data-lb-height="400">B</a>
+    `);
+  });
+
+  it('loads, sizes, and reveals the image with its details and navigation', async () => {
+    click(links()[0]);
+    expect($q('#lightbox').dataset.state).toBe('loading');
+
+    await settle();
+
+    expect($q('#lightbox').dataset.state).toBe('ready');
+    expect($q('#lightbox .lb-image').src).toBe(links()[0].href);
+    expect($q('#lightbox .lb-image').style.width).toBe('400px');
+    expect($q('#lightbox .lb-title').textContent).toBe('First');
+    expect($q('#lightbox .lb-prev').hidden).toBe(true);
+    expect($q('#lightbox .lb-next').hidden).toBe(false);
+  });
+
+  it('shows only the latest image when changed again before loading finished', async () => {
+    click(links()[0]);
+    lightbox.changeImage(1);
+
+    await settle();
+
+    expect($q('#lightbox .lb-title').textContent).toBe('Second');
+    expect($q('#lightbox .lb-image').style.width).toBe('300px');
+    expect($q('#lightbox .lb-prev').hidden).toBe(false);
+    expect($q('#lightbox .lb-next').hidden).toBe(true);
+  });
+
+  it('does not reveal an image that finishes loading after the lightbox closed', async () => {
+    click(links()[0]);
+    lightbox.end();
+
+    await settle();
+
+    expect($q('#lightbox').dataset.state).toBe('loading');
+  });
+
+  it('shows navigation in both directions when wrapAround is set', async () => {
+    lightbox.option({ wrapAround: true });
+    click(links()[0]);
+
+    await settle();
+    lightbox.option({ wrapAround: false });
+
+    expect($q('#lightbox .lb-prev').hidden).toBe(false);
+    expect($q('#lightbox .lb-next').hidden).toBe(false);
   });
 });
 
