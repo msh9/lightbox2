@@ -28,9 +28,9 @@
     <hr />
 
     <h3>Picture With Fallback</h3>
-    <!-- The fallback is deliberately a different image so it is obvious when a browser without AVIF support uses it. -->
+    <!-- Each file is labelled with its format. In Chrome, DevTools > Rendering > "Disable AVIF image format" forces the JPG fallback. -->
     <div>
-      <a class="example-image-link" href="/test-examples/ImgD.avif" data-lb-href-fallback="/test-examples/ImgC.jpg" data-lightbox="example-picture" data-lb-title="AVIF with a JPG fallback." data-lb-caption="Browsers without AVIF support show a different (JPG) image here."><img class="example-image" src="/test-examples/ImgD.avif" alt="" style="max-width: 400px; max-height: 400px;" /></a>
+      <a class="example-image-link" href="/test-examples/Picture.avif" data-lb-href-fallback="/test-examples/Picture.jpg" data-lb-width="1200" data-lb-height="800" data-lightbox="example-picture" data-lb-title="AVIF with a JPG fallback." data-lb-caption="The image is labelled with the format your browser chose."><img class="example-image" src="/test-examples/Picture-400h.jpg" alt="" style="max-width: 400px; max-height: 400px;" /></a>
     </div>
   </section>
 
