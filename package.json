@@ -1,6 +1,6 @@
 {
   "name": "lightbox2",
-  "version": "3.0.5",
+  "version": "4.0.0",
   "contributors": [
     {
       "name": "Lokesh Dhakar",
@@ -38,7 +38,7 @@
     "watch": "npx concurrently \"npm:watch:*\"",
     "watch:js": "npx rollup -c rollup.config.mjs -w",
     "watch:css": "postcss src/css/lightbox.css -o dist/css/lightbox.min.css --no-map --watch",
-    "start": "http-server .",
+    "start": "npx concurrently --kill-others \"npm:watch:*\" \"http-server .\"",
     "lint": "npx concurrently \"npm:lint:*\"",
     "lint:js": "eslint",
     "lint:css": "stylelint \"src/css/**/*.css\"",

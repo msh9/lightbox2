@@ -20,6 +20,10 @@
   padding: 0;
   border: 0;
   background: transparent;
+
+  /* Layout lives here rather than under [open], which is removed as soon as the closing fade starts. */
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   line-height: 0;
   font-weight: normal;
@@ -33,8 +37,6 @@
 
 .lightbox[open] {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   opacity: 1;
 }
 
@@ -68,14 +70,11 @@
   }
 }
 
-/* Keep the page from scrolling behind the open lightbox. */
+/* Keep the page from scrolling behind the open lightbox. The gutter holds the scrollbar's space
+   while it is hidden, so the page doesn't shift sideways on open or as the closing fade starts. */
 html:has(.lightbox[open]) {
   overflow: hidden;
-}
-
-/* Class rules below set display, so make sure the hidden attribute still wins. */
-.lightbox [hidden] {
-  display: none !important;
+  scrollbar-gutter: stable;
 }
 
 .lightbox button {
@@ -258,4 +257,10 @@ html:has(.lightbox[open]) {
 
 .lightbox:not([data-state="loading"]) .lb-loader {
   display: none;
+}
+
+/* Class rules above set display, so make sure the hidden attribute still wins. Kept last so it
+   also wins in jsdom, whose cascade ignores !important. */
+.lightbox [hidden] {
+  display: none !important;
 }

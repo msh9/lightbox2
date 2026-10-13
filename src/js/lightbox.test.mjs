@@ -5,31 +5,46 @@
  * @jest-environment: jsdom
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { readFileSync } from 'node:fs';
 import lightbox from './lightbox.mjs';
 
 /*
   These tests drive the lightbox through the DOM, the way a page and its visitors would, so that
   they hold regardless of how it is implemented. Page links live in a fixture element; the
   lightbox's own markup is appended to <body> and persists between tests.
+
+  Tests wait on events and promises rather than on time: the stand-ins below behave like a browser,
+  including firing close a task after close(), and decode() can be held back to control ordering.
 */
 let fixture;
 
 // jsdom has no <dialog> methods and no img.decode(); stand in with the behavior the lightbox uses.
-HTMLDialogElement.prototype.showModal ??= function() {
+HTMLDialogElement.prototype.showModal = function() {
   this.open = true;
 };
-HTMLDialogElement.prototype.close ??= function() {
+HTMLDialogElement.prototype.close = function() {
   if (this.open) {
     this.open = false;
-    this.dispatchEvent(new Event('close'));
+    // Browsers queue the close event rather than firing it during close().
+    setTimeout(() => this.dispatchEvent(new Event('close')));
   }
 };
-HTMLImageElement.prototype.decode ??= function() {
-  return Promise.resolve();
+
+let pendingDecode = null;
+HTMLImageElement.prototype.decode = function() {
+  return pendingDecode?.promise ?? Promise.resolve();
 };
 
-function settle() {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+// Hold back decode() until the test resolves or rejects it, e.g. to close while an image loads.
+function holdDecode() {
+  const deferred = {};
+  deferred.promise = new Promise((resolve, reject) => Object.assign(deferred, { resolve, reject }));
+  pendingDecode = deferred;
+  return deferred;
+}
+
+function nextEvent(element, type) {
+  return new Promise((resolve) => element.addEventListener(type, resolve, { once: true }));
 }
 
 function render(html) {
@@ -61,6 +76,11 @@ function isHidden(element) {
 }
 
 beforeAll(() => {
+  // Apply the real stylesheet so display checks, such as for hidden elements, reflect it.
+  const style = document.createElement('style');
+  style.textContent = readFileSync(new URL('../css/lightbox.css', import.meta.url), 'utf8');
+  document.head.append(style);
+
   lightbox.init();
 
   fixture = document.createElement('div');
@@ -76,9 +96,15 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
   jest.restoreAllMocks();
-  lightbox.end();
+  pendingDecode = null;
+  // Wait for the close event so its clean-up cannot run during the next test.
+  if ($q('#lightbox').open) {
+    const closed = nextEvent($q('#lightbox'), 'close');
+    lightbox.end();
+    await closed;
+  }
   fixture.innerHTML = '';
   lightbox.album = [];
   lightbox.currentImageIndex = 0;
@@ -326,16 +352,20 @@ describe('closing', () => {
     lightbox.enableKeyboardNav();
   });
 
-  it('closes the dialog and stops keyboard navigation', () => {
+  it('closes the dialog and stops keyboard navigation', async () => {
+    const closed = nextEvent($q('#lightbox'), 'close');
     lightbox.end();
+    await closed;
 
     expect($q('#lightbox').open).toBe(false);
     keyup($q('#lightbox'), 'ArrowRight');
     expect(changeImageSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('cleans up when the browser closes the dialog itself, e.g. on Escape', () => {
+  it('cleans up when the browser closes the dialog itself, e.g. on Escape', async () => {
+    const closed = nextEvent($q('#lightbox'), 'close');
     $q('#lightbox').close();
+    await closed;
 
     keyup($q('#lightbox'), 'ArrowRight');
     expect(changeImageSpy).toHaveBeenCalledTimes(1);
@@ -343,9 +373,13 @@ describe('closing', () => {
 });
 
 describe('showing an image', () => {
+  // The promise returned by the most recent changeImage call, settled once that change is done.
+  const lastChange = () => changeImageSpy.mock.results.at(-1).value;
+
   beforeEach(() => {
-    // Let the real changeImage run; the decode() stand-in resolves immediately.
+    // Let the real changeImage run, still recording its calls and the promises they return.
     changeImageSpy.mockRestore();
+    changeImageSpy = jest.spyOn(lightbox, 'changeImage');
     render(`
       <a href="a.jpg" data-lightbox="set" data-lb-title="First" data-lb-width="400" data-lb-height="300">A</a>
       <a href="b.jpg" data-lightbox="set" data-lb-title="Second" data-lb-width="300" data-lb-height="400">B</a>
@@ -356,21 +390,23 @@ describe('showing an image', () => {
     click(links()[0]);
     expect($q('#lightbox').dataset.state).toBe('loading');
 
-    await settle();
+    await lastChange();
 
     expect($q('#lightbox').dataset.state).toBe('ready');
     expect($q('#lightbox .lb-image').src).toBe(links()[0].href);
     expect($q('#lightbox .lb-image').style.width).toBe('400px');
     expect($q('#lightbox .lb-title').textContent).toBe('First');
-    expect($q('#lightbox .lb-prev').hidden).toBe(true);
-    expect($q('#lightbox .lb-next').hidden).toBe(false);
+    expect(isHidden($q('#lightbox .lb-prev'))).toBe(true);
+    expect(isHidden($q('#lightbox .lb-next'))).toBe(false);
   });
 
   it('shows only the latest image when changed again before loading finished', async () => {
+    const decode = holdDecode();
     click(links()[0]);
     lightbox.changeImage(1);
+    decode.resolve();
 
-    await settle();
+    await Promise.all(changeImageSpy.mock.results.map((result) => result.value));
 
     expect($q('#lightbox .lb-title').textContent).toBe('Second');
     expect($q('#lightbox .lb-image').style.width).toBe('300px');
@@ -378,11 +414,57 @@ describe('showing an image', () => {
     expect($q('#lightbox .lb-next').hidden).toBe(true);
   });
 
-  it('does not reveal an image that finishes loading after the lightbox closed', async () => {
+  it('still reveals an image that fails to decode', async () => {
+    const decode = holdDecode();
     click(links()[0]);
-    lightbox.end();
+    decode.reject(new DOMException('Broken image', 'EncodingError'));
 
-    await settle();
+    await lastChange();
+
+    expect($q('#lightbox').dataset.state).toBe('ready');
+  });
+
+  it('waits for the resize to finish before revealing the image', async () => {
+    let finishResize;
+    jest.spyOn(lightbox, 'sizeContainer').mockReturnValue(new Promise((resolve) => {
+      finishResize = resolve;
+    }));
+    click(links()[0]);
+    await Promise.resolve();
+
+    expect($q('#lightbox').dataset.state).toBe('loading');
+
+    finishResize();
+    await lastChange();
+
+    expect($q('#lightbox').dataset.state).toBe('ready');
+  });
+
+  it('does not reveal an image that finishes loading after the lightbox closed', async () => {
+    const decode = holdDecode();
+    click(links()[0]);
+    const closed = nextEvent($q('#lightbox'), 'close');
+    lightbox.end();
+    await closed;
+
+    decode.resolve();
+    await lastChange();
+
+    expect($q('#lightbox').dataset.state).toBe('loading');
+  });
+
+  it('does not reveal an image when the lightbox closed during the resize', async () => {
+    let finishResize;
+    jest.spyOn(lightbox, 'sizeContainer').mockReturnValue(new Promise((resolve) => {
+      finishResize = resolve;
+    }));
+    click(links()[0]);
+    const closed = nextEvent($q('#lightbox'), 'close');
+    lightbox.end();
+    await closed;
+
+    finishResize();
+    await lastChange();
 
     expect($q('#lightbox').dataset.state).toBe('loading');
   });
@@ -391,7 +473,7 @@ describe('showing an image', () => {
     lightbox.option({ wrapAround: true });
     click(links()[0]);
 
-    await settle();
+    await lastChange();
     lightbox.option({ wrapAround: false });
 
     expect($q('#lightbox .lb-prev').hidden).toBe(false);

@@ -40,8 +40,10 @@
     </p>
   </section>
 
-  <script src="../dist/js/lightbox.min.js"></script>
-  <script>lightbox.init();</script>
+  <script type="module">
+    import lightbox from '../dist/js/lightbox.module.js';
+    lightbox.init();
+  </script>
   
 
 </body>
