@@ -20,6 +20,10 @@
   padding: 0;
   border: 0;
   background: transparent;
+
+  /* Layout lives here rather than under [open], which is removed as soon as the closing fade starts. */
+  flex-direction: column;
+  justify-content: center;
   text-align: center;
   line-height: 0;
   font-weight: normal;
@@ -33,8 +37,6 @@
 
 .lightbox[open] {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   opacity: 1;
 }
 
@@ -74,7 +76,7 @@ html:has(.lightbox[open]) {
 }
 
 /* Class rules below set display, so make sure the hidden attribute still wins. */
-.lightbox:not([open]) {
+.lightbox [hidden] {
   display: none !important;
 }
 
