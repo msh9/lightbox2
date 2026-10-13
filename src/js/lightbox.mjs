@@ -190,15 +190,15 @@ class Lightbox {
     // decode() rejects for broken images too; carry on regardless so the spinner never hangs.
     try {
       await imageElement.decode();
-      if (changeId !== this.changeId) {
-        return null;
-      }
-      if (!resized) {
-        await this.sizeContainer(imageElement.naturalWidth, imageElement.naturalHeight, isSvg);
-      }
+    } catch {
+      // Show it anyway.
+    }
+    if (changeId !== this.changeId) {
+      return;
+    }
+    await (resized ?? this.sizeContainer(imageElement.naturalWidth, imageElement.naturalHeight, isSvg));
+    if (changeId === this.changeId) {
       this.showImage();
-    } catch (err) {
-      console.log(err);
     }
   }
 
