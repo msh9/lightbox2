@@ -74,7 +74,7 @@ html:has(.lightbox[open]) {
 }
 
 /* Class rules below set display, so make sure the hidden attribute still wins. */
-.lightbox [hidden] {
+.lightbox:not([open]) {
   display: none !important;
 }
 
