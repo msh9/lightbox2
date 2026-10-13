@@ -39,28 +39,28 @@ const TEMPLATE = `
 
 // Resolve once the element's CSS transition has run, or straight away when it has no duration
 // (for example under prefers-reduced-motion). The timer covers a transitionend that never fires.
-function afterTransition(element) {
+async function afterTransition(element) {
   const durations = getComputedStyle(element).transitionDuration.split(',').map(parseFloat);
   const longest = Math.max(...durations) * 1000;
   if (!(longest > 0)) {
-    return Promise.resolve();
+    return
   }
-  return new Promise(function(resolve) {
+
+  return new Promise((resolve) => {
     let timer;
     function done() {
       clearTimeout(timer);
-      element.removeEventListener('transitionend', done);
       resolve();
     }
     timer = setTimeout(done, longest + 100);
-    element.addEventListener('transitionend', done);
+    element.addEventListener('transitionend', done, { once: true });
   });
 }
 
 // Read an element's top/right/bottom/left values for a box property such as padding.
 function boxSides(element, property, suffix = '') {
   const style = getComputedStyle(element);
-  const side = (name) => parseFloat(style.getPropertyValue(property + '-' + name + suffix)) || 0;
+  const side = (name) => parseFloat(style.getPropertyValue(`${property}-${name}${suffix}`)) || 0;
   return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
 }
 
@@ -102,8 +102,8 @@ class Lightbox {
     this.initialized = true;
 
     const setUp = () => {
-      this.enable();
       this.build();
+      this.enable();
     };
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', setUp, { once: true });
@@ -148,7 +148,9 @@ class Lightbox {
     this.imageBorderWidth = boxSides(this.image, 'border', '-width');
 
     // Every way of closing, including Escape handled by the browser, ends with a close event.
-    this.dialog.addEventListener('close', () => this.cleanUp());
+    this.dialog.addEventListener('close', () => {
+      this.cleanUp()
+    });
 
     attachControls(this);
   }
@@ -168,10 +170,10 @@ class Lightbox {
   }
 
   // Hide the current image, load the requested one, resize to fit it, and then show it.
-  changeImage(imageNumber) {
+  async changeImage(imageNumber) {
     const image = this.album[imageNumber];
     const isSvg = image.link.split('.').slice(-1)[0] === 'svg';
-    const img = this.image;
+    const imageElement = this.image;
     const changeId = ++this.changeId;
 
     this.currentImageIndex = imageNumber;
@@ -186,16 +188,18 @@ class Lightbox {
     const resized = image.width && image.height ? this.sizeContainer(image.width, image.height, isSvg) : null;
 
     // decode() rejects for broken images too; carry on regardless so the spinner never hangs.
-    img.decode().catch(() => {}).then(() => {
+    try {
+      await imageElement.decode();
       if (changeId !== this.changeId) {
         return null;
       }
-      return resized || this.sizeContainer(img.naturalWidth, img.naturalHeight, isSvg);
-    }).then(() => {
-      if (changeId === this.changeId) {
-        this.showImage();
+      if (!resized) {
+        await this.sizeContainer(imageElement.naturalWidth, imageElement.naturalHeight, isSvg);
       }
-    });
+      this.showImage();
+    } catch (err) {
+      console.log(err);
+    }
   }
 
   // Show an album entry in the lightbox's <picture>.
@@ -206,7 +210,7 @@ class Lightbox {
 
   // Size the image to fit the viewport and resize the container around it. The container's size
   // change is animated in CSS; the returned promise resolves once it has finished.
-  sizeContainer(naturalWidth, naturalHeight, isSvg) {
+  async sizeContainer(naturalWidth, naturalHeight, isSvg) {
     const padding = this.containerPadding;
     const border = this.imageBorderWidth;
     const max = maxImageSize(
@@ -217,20 +221,21 @@ class Lightbox {
     );
     const size = fitImage({ width: naturalWidth, height: naturalHeight }, max, isSvg);
 
-    this.image.style.width = size.width + 'px';
-    this.image.style.height = size.height + 'px';
+    this.image.style.width = `${size.width}px`;
+    this.image.style.height = `${size.height}px`;
 
     const newWidth = size.width + padding.left + padding.right + border.left + border.right;
     const newHeight = size.height + padding.top + padding.bottom + border.top + border.bottom;
+    const newWidthStyle = `${newWidth}px`;
 
-    this.dataContainer.style.width = newWidth + 'px';
+    this.dataContainer.style.width = newWidthStyle;
 
     const outerContainer = this.outerContainer;
     if (outerContainer.offsetWidth === newWidth && outerContainer.offsetHeight === newHeight) {
-      return Promise.resolve();
+      return;
     }
-    outerContainer.style.width = newWidth + 'px';
-    outerContainer.style.height = newHeight + 'px';
+    outerContainer.style.width = newWidthStyle;
+    outerContainer.style.height = `${newHeight}px`;
     return afterTransition(outerContainer);
   }
 
@@ -264,7 +269,7 @@ class Lightbox {
     const currentImage = this.album[this.currentImageIndex];
 
     const renderText = (className, value) => {
-      const node = this.dialog.querySelector('.' + className);
+      const node = this.dialog.querySelector(`.${className}`);
       node.textContent = value || '';
       node.hidden = !value;
       return Boolean(value);
@@ -272,8 +277,8 @@ class Lightbox {
 
     const hasTitle = renderText('lb-title', currentImage.title);
     const describedBy = ['caption', 'copyright']
-      .filter((field) => renderText('lb-' + field, currentImage[field]))
-      .map((field) => 'lb-' + field);
+      .filter((field) => renderText(`lb-${field}`, currentImage[field]))
+      .map((field) => `lb-${field}`);
 
     // Name the dialog after the image title, falling back to the generic aria-label.
     if (hasTitle) {
@@ -309,7 +314,6 @@ class Lightbox {
     this.keyboardEnabled = false;
   }
 
-  // Closing time. :-(
   end() {
     if (this.dialog?.open) {
       this.dialog.close();
