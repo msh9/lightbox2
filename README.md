@@ -1,15 +1,13 @@
 # Lightbox
 
-Fork of Lightbox2 originally by [Lokesh Dhakar](https://github.com/lokesh/lightbox2)
+A zero-production-dependency HTML attribute driven modal lightbox. Originally based on Lightbox2 by [Lokesh Dhakar](https://github.com/lokesh/lightbox2), now with many, many changes.
 
-This fork differs from the original in a few ways:
+Key features,
 
-- Title, caption, and copyright are read from data attributes (see below) and always rendered as plain text. The `sanitizeTitle` option and the fallback to the link's `title` attribute have been removed.
-- Image map `<area>` elements are no longer supported; use links.
-- No jQuery or other runtime dependencies, and it must be set up explicitly with `lightbox.init()`. Requires a modern browser.
+- Title, caption, and copyright are read from data attributes (see below) and always rendered as plain text. 
+- No jQuery or other runtime dependencies
+- Renders images with the HTML picture tag to provide client aware alternative image formats.
 - The lightbox is a native modal `<dialog>`, which provides the backdrop, focus handling, closing on Escape, and keeps the page from scrolling behind it. Fades and resizing are CSS transitions.
-- Only the `albumLabel`, `showImageNumberLabel`, and `wrapAround` options remain. Images always fit the viewport, and the previous/next controls are always visible on devices without hover.
-- Updates the build toolchain with more recent tools, tests, and linters.
 
 ## Setup
 
@@ -23,10 +21,12 @@ Include the stylesheet and the script, then call `init()` once:
 
 Or, as a module:
 
-```js
+```html
+<script type="module">
 import lightbox from './dist/js/lightbox.module.js';
 
 lightbox.init({ wrapAround: true });
+</script>
 ```
 
 `init()` accepts the same options as `lightbox.option()` and can be called before the document has finished loading.
