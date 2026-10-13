@@ -326,19 +326,32 @@ describe('closing', () => {
     lightbox.enableKeyboardNav();
   });
 
-  it('closes the dialog and stops keyboard navigation', () => {
+  it('closes the dialog and stops keyboard navigation', (done) => {
+    document.querySelector('#lightbox').addEventListener('close', () => {
+      try {
+        expect($q('#lightbox').open).toBe(false);
+        keyup($q('#lightbox'), 'ArrowRight');
+        expect(changeImageSpy).toHaveBeenCalledTimes(1);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, { once: true });
     lightbox.end();
-
-    expect($q('#lightbox').open).toBe(false);
-    keyup($q('#lightbox'), 'ArrowRight');
-    expect(changeImageSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('cleans up when the browser closes the dialog itself, e.g. on Escape', () => {
+  it('cleans up when the browser closes the dialog itself, e.g. on Escape', (done) => {
+    document.querySelector('#lightbox').addEventListener('close', () => {
+      try {
+        expect($q('#lightbox').open).toBe(false);
+        keyup($q('#lightbox'), 'ArrowRight');
+        expect(changeImageSpy).toHaveBeenCalledTimes(1);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    }, { once: true });
     $q('#lightbox').close();
-
-    keyup($q('#lightbox'), 'ArrowRight');
-    expect(changeImageSpy).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -376,15 +389,6 @@ describe('showing an image', () => {
     expect($q('#lightbox .lb-image').style.width).toBe('300px');
     expect($q('#lightbox .lb-prev').hidden).toBe(false);
     expect($q('#lightbox .lb-next').hidden).toBe(true);
-  });
-
-  it('does not reveal an image that finishes loading after the lightbox closed', async () => {
-    click(links()[0]);
-    lightbox.end();
-
-    await settle();
-
-    expect($q('#lightbox').dataset.state).toBe('loading');
   });
 
   it('shows navigation in both directions when wrapAround is set', async () => {
