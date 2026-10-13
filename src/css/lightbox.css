@@ -70,9 +70,11 @@
   }
 }
 
-/* Keep the page from scrolling behind the open lightbox. */
+/* Keep the page from scrolling behind the open lightbox. The gutter holds the scrollbar's space
+   while it is hidden, so the page doesn't shift sideways on open or as the closing fade starts. */
 html:has(.lightbox[open]) {
   overflow: hidden;
+  scrollbar-gutter: stable;
 }
 
 .lightbox button {
